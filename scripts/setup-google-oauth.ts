@@ -47,7 +47,7 @@ async function main() {
     "3. OAuth consent screen: if the app is \"In production\", Google may block http://localhost. Set the app to Testing (or use a public HTTPS redirect) for local dev."
   );
   console.log("──────────────────────────\n");
-  console.log("→ Opening your browser to authorize MJ...\n");
+  console.log("→ Opening your browser to authorize Gwen...\n");
 
   const server = http.createServer(async (req, res) => {
     try {
@@ -66,7 +66,7 @@ async function main() {
       res.writeHead(200, { "Content-Type": "text/html" });
       res.end(`
         <html><body style="font-family: system-ui; padding: 40px; background: #000; color: #00d4ff;">
-          <h1>✓ MJ is connected.</h1>
+          <h1>✓ Gwen is connected.</h1>
           <p>You can close this tab.</p>
         </body></html>
       `);

@@ -14,9 +14,9 @@ export function useOrb() {
   const decayRef = useRef(null);
 
   useEffect(() => {
-    if (!window.mjBridge) return;
-    const unsubState = window.mjBridge.onState((s) => setState(s));
-    const unsubLevel = window.mjBridge.onAudioLevel((lvl) => {
+    if (!window.gwenBridge) return;
+    const unsubState = window.gwenBridge.onState((s) => setState(s));
+    const unsubLevel = window.gwenBridge.onAudioLevel((lvl) => {
       setAudioLevel(Math.max(0, Math.min(1, lvl)));
       // Auto-decay so the orb relaxes between chunks
       if (decayRef.current) clearTimeout(decayRef.current);

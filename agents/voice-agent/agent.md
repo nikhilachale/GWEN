@@ -7,7 +7,7 @@
 
 ## Role
 
-The Voice Agent is the conductor of MJ's voice loop. It owns the runtime state
+The Voice Agent is the conductor of Gwen's voice loop. It owns the runtime state
 machine (idle, listening, thinking, speaking), wires Whisper STT to the
 Orchestrator, pipes the Orchestrator's text response to ElevenLabs TTS, and
 emits IPC events to the renderer so the orb visualization stays in sync.
@@ -40,14 +40,14 @@ plain Node.js coordinator.
 
 | State | Orb | Mic | Description |
 |---|---|---|---|
-| `idle` | cyan, slow breathe | wake-word only | Waiting for "Hey MJ" |
+| `idle` | cyan, slow breathe | wake-word only | Waiting for "Hey Gwen" |
 | `listening` | white, fast pulse | full transcribe | Recording user speech |
 | `thinking` | amber, spin | closed | Brain + tool loop running |
 | `speaking` | green, audio-reactive | closed (interrupt-only) | TTS playing |
 
 ### Transition rules
 
-- **idle → listening**: Porcupine emits `'wakeword'` event, OR user clicks mic button (`mj:trigger` IPC)
+- **idle → listening**: Porcupine emits `'wakeword'` event, OR user clicks mic button (`gwen:trigger` IPC)
 - **listening → thinking**: 1.2s of silence detected, OR 8s max window reached, OR user stops speaking and `node-record-lpcm16` flushes
 - **listening → idle**: Whisper returns empty string `""` (no speech captured)
 - **thinking → speaking**: Orchestrator returns final text; Voice Agent calls `speaker.speakStream(text)`
@@ -80,7 +80,7 @@ export async function speakStream(text, onLevel) { ... }
 
 ### `core/wakeword.js`
 Always-on Porcupine loop using `PORCUPINE_ACCESS_KEY`. Custom keyword file
-at `data/wakewords/hey-mj.ppn` (trained on Picovoice console). Emits
+at `data/wakewords/hey-gwen.ppn` (trained on Picovoice console). Emits
 `'wakeword'` on the global event bus when detected.
 
 ### `electron/main.js`
@@ -93,9 +93,9 @@ fires IPC to renderer on every state change.
 
 | Channel | When | Payload |
 |---|---|---|
-| `mj:state` | every state change | `'idle' \| 'listening' \| 'thinking' \| 'speaking'` |
-| `mj:transcript` | after STT and after final TTS text | `{ role: 'user' \| 'assistant', text: string }` |
-| `mj:audio-level` | every TTS audio chunk | `number` (0–1) |
+| `gwen:state` | every state change | `'idle' \| 'listening' \| 'thinking' \| 'speaking'` |
+| `gwen:transcript` | after STT and after final TTS text | `{ role: 'user' \| 'assistant', text: string }` |
+| `gwen:audio-level` | every TTS audio chunk | `number` (0–1) |
 
 ---
 
@@ -124,6 +124,6 @@ const TTS_CHUNK_MAX_CHARS  = 500;   // split long responses into sentences
 - ❌ Never accept mic input during `thinking` or `speaking` (except wake-word interrupt)
 - ❌ Never play TTS over an already-playing TTS — always cancel + restart
 - ❌ Never block the main event loop — all I/O is async
-- ✅ Always emit `mj:state` BEFORE doing the work for that state (so orb updates first)
+- ✅ Always emit `gwen:state` BEFORE doing the work for that state (so orb updates first)
 - ✅ Always clean up `/tmp/mj_input.wav` even on error paths
 - ✅ If Whisper fails, return to `idle` silently — don't speak an error

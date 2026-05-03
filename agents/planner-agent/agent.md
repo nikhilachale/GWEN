@@ -7,12 +7,12 @@
 
 ## Role
 
-The Planner Agent generates MJ's signature morning briefing. It pulls from
+The Planner Agent generates Gwen's signature morning briefing. It pulls from
 the Calendar, Task, and Memory agents, structures the data, and either
 returns the structured plan (for the Orchestrator to speak directly) or
 hands it to its own Claude call for natural-language synthesis.
 
-This is the agent the user invokes with "Good morning, MJ" or "Give me
+This is the agent the user invokes with "Good morning, Gwen" or "Give me
 the day plan."
 
 ---
@@ -23,7 +23,7 @@ Used when the Planner Agent calls Claude directly to generate the briefing
 text:
 
 ```
-You are MJ's daily planner. Given calendar events, tasks, and user preferences,
+You are Gwen's daily planner. Given calendar events, tasks, and user preferences,
 generate a spoken morning briefing. Structure: (1) greet by name, (2) overview
 of the day's meetings, (3) top tasks to complete, (4) any overdue items,
 (5) one motivational closer. Keep total briefing under 45 seconds of speech.
@@ -87,7 +87,7 @@ Implemented in `src/tools/dayplan.js`:
     ...
   ],
   context: {
-    topPriority: "Ship MJ v1",     // from memory: top_priority
+    topPriority: "Ship Gwen v1",     // from memory: top_priority
     workStart:   "09:00",          // from memory: work_start
   },
 }

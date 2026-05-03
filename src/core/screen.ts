@@ -3,9 +3,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { captureScreen, getActiveAppName } from "../skills/screenshot.js";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = process.env.GWEN_VISION_MODEL || "claude-sonnet-4-6";
 
-const SCREEN_PROMPT = `You are MJ's vision module. Given a screenshot, describe what the user is
+const SCREEN_PROMPT = `You are Gwen's vision module. Given a screenshot, describe what the user is
 currently working on in 1–2 sentences. Focus on: app name, content summary,
 any errors or alerts visible. Be brief — this is context for the main brain,
 not a full description for the user.`;
@@ -16,7 +16,7 @@ not a full description for the user.`;
  * @returns {Promise<string>}
  */
 export async function getScreenContext(focus) {
-  if (process.env.MJ_DISABLE_SCREEN === "1") {
+  if (process.env.GWEN_DISABLE_SCREEN === "1") {
     return "Screen access is disabled in your config.";
   }
 

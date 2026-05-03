@@ -1,5 +1,5 @@
 // src/tools/shortcuts.js — bridge to the macOS Shortcuts app.
-// Lets MJ trigger any user-defined Shortcut, which unlocks HomeKit,
+// Lets Gwen trigger any user-defined Shortcut, which unlocks HomeKit,
 // Focus modes, custom automations, etc. without writing more JS.
 import { exec } from "node:child_process";
 import { promisify } from "node:util";

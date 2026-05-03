@@ -44,11 +44,11 @@ cp .env.example .env
 ```
 
 You need at minimum:
-- `ANTHROPIC_KEY` — to make MJ think
+- `ANTHROPIC_KEY` — to make Gwen think
 - `OPENAI_KEY` — for Whisper STT
 - `ELEVEN_KEY` + `ELEVEN_VOICE_ID` — for TTS
 
-Google + Tavily + Porcupine keys are optional — MJ degrades gracefully without them.
+Google + Tavily + Porcupine keys are optional — Gwen degrades gracefully without them.
 
 ### 4. (Optional) Connect Google
 
@@ -69,7 +69,7 @@ Vite serves the renderer on `localhost:5173`, Electron picks it up.
 
 ---
 
-## What MJ can do
+## What Gwen can do
 
 ### Productivity
 - **Calendar** — read upcoming Google Calendar events
@@ -124,7 +124,7 @@ Vite serves the renderer on `localhost:5173`, Electron picks it up.
 
 ## What needs setup
 
-- **Wake word** — Porcupine `.ppn` file at `data/wakewords/hey-mj.ppn`
+- **Wake word** — Porcupine `.ppn` file at `data/wakewords/hey-gwen.ppn`
 - **Claude Code build pipeline** — works if `claude` CLI is on `$PATH`
 - **Bluetooth control** — `brew install blueutil`
 - **Phone calls** — paired iPhone with *Calls on Other Devices* enabled
@@ -191,7 +191,7 @@ npm run test:tool calendar
 
 **`better-sqlite3` errors after install** — run `npx electron-rebuild -f -w better-sqlite3`
 
-**macOS: "MJ can't access the microphone"** — System Settings → Privacy & Security → Microphone → enable for Electron/Terminal
+**macOS: "Gwen can't access the microphone"** — System Settings → Privacy & Security → Microphone → enable for Electron/Terminal
 
 **macOS: screen capture is black** — System Settings → Privacy & Security → Screen Recording → enable
 

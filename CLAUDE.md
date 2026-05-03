@@ -1,11 +1,11 @@
-# MJ — JARVIS-Style AI Assistant
+# Gwen — JARVIS-Style AI Assistant
 > Claude Code project instructions. Read this fully before touching any file.
 
 ---
 
 ## 🧠 Project Overview
 
-**MJ** is a voice-first, always-on AI desktop assistant built with:
+**Gwen** is a voice-first, always-on AI desktop assistant built with:
 - **Electron** — desktop shell
 - **Node.js / ESM** — all backend logic (no Python, no CommonJS)
 - **React + Vite** — renderer UI
@@ -22,7 +22,7 @@
 ## 📁 Project Structure
 
 ```
-mj/
+gwen/
 ├── CLAUDE.md                     ← YOU ARE HERE
 ├── .env                          ← secrets (never commit)
 ├── package.json
@@ -35,7 +35,7 @@ mj/
 │   │   ├── brain.js              ← Claude API orchestrator + tool loop
 │   │   ├── listener.js           ← mic recording → Whisper STT
 │   │   ├── speaker.js            ← ElevenLabs TTS + audio streaming
-│   │   ├── wakeword.js           ← "Hey MJ" detection via Porcupine
+│   │   ├── wakeword.js           ← "Hey Gwen" detection via Porcupine
 │   │   └── screen.js             ← screenshot-desktop → base64
 │   ├── tools/
 │   │   ├── calendar.js           ← Google Calendar read
@@ -58,7 +58,7 @@ mj/
 ├── data/
 │   ├── tasks.json                ← flat task store
 │   ├── notes/                    ← markdown note files
-│   └── .mj-memory.db            ← SQLite (auto-created)
+│   └── .gwen-memory.db            ← SQLite (auto-created)
 └── scripts/
     └── setup-google-oauth.js    ← one-time OAuth flow
 ```
@@ -96,7 +96,7 @@ PORCUPINE_ACCESS_KEY=...         # from Picovoice console
 - **`"type": "module"`** in `package.json`
 - **No TypeScript** — plain JS with JSDoc comments where types matter
 - **Async/await** everywhere — no raw `.then()` chains
-- **Error handling** — every `async` function has `try/catch`, logs to console, and returns a safe fallback string so MJ never crashes on tool failure
+- **Error handling** — every `async` function has `try/catch`, logs to console, and returns a safe fallback string so Gwen never crashes on tool failure
 
 ### Naming
 - Files: `camelCase.js`
@@ -127,11 +127,11 @@ export async function getTasks() {
 ### IPC Channels (Electron)
 | Channel | Direction | Payload |
 |---|---|---|
-| `mj:state` | main → renderer | `'idle' \| 'listening' \| 'thinking' \| 'speaking'` |
-| `mj:transcript` | main → renderer | `{ role, text }` |
-| `mj:audio-level` | main → renderer | `number 0–1` |
-| `mj:code-output` | main → renderer | `string` (streaming Claude Code output) |
-| `mj:trigger` | renderer → main | `'listen'` (manual button press) |
+| `gwen:state` | main → renderer | `'idle' \| 'listening' \| 'thinking' \| 'speaking'` |
+| `gwen:transcript` | main → renderer | `{ role, text }` |
+| `gwen:audio-level` | main → renderer | `number 0–1` |
+| `gwen:code-output` | main → renderer | `string` (streaming Claude Code output) |
+| `gwen:trigger` | renderer → main | `'listen'` (manual button press) |
 
 ---
 
@@ -162,7 +162,7 @@ See `agents/AGENTS.md` for full agent specs. Quick summary:
 
 | Agent | Role |
 |---|---|
-| `orchestrator` | Main MJ brain — routes to all tools/agents |
+| `orchestrator` | Main Gwen brain — routes to all tools/agents |
 | `voice-agent` | Manages STT/TTS pipeline + state machine |
 | `calendar-agent` | Google Calendar scoped logic |
 | `email-agent` | Gmail read-only scoped logic |
@@ -198,7 +198,7 @@ See `agents/AGENTS.md` for full agent specs. Quick summary:
 2. **Never auto-execute** Claude Code output without showing the user first
 3. **Never store raw email content** in SQLite — only metadata
 4. **Never commit `.env`** or `data/google-token.json`
-5. **Screen capture** only happens when the user explicitly asks MJ about their screen
+5. **Screen capture** only happens when the user explicitly asks Gwen about their screen
 6. **No hot-reloading in production** — Vite dev server only in dev mode
 7. **All API keys** come from `process.env` — never hardcoded
 
@@ -220,7 +220,7 @@ node scripts/test-brain.js "What's on my schedule today?"
 
 ---
 
-## 🚀 Running MJ
+## 🚀 Running Gwen
 
 ```bash
 # Development
@@ -248,5 +248,5 @@ node scripts/setup-google-oauth.js
 - [ ] **Step 8** — `tools/dayplan.js` (combine calendar + tasks)
 - [ ] **Step 9** — `core/screen.js` + wire into brain
 - [ ] **Step 10** — `tools/codegen.js` (Claude Code CLI spawn)
-- [ ] **Step 11** — `core/wakeword.js` (Porcupine "Hey MJ")
+- [ ] **Step 11** — `core/wakeword.js` (Porcupine "Hey Gwen")
 - [ ] **Step 12** — Polish UI, transitions, transcript fade

@@ -2,16 +2,20 @@
 import Database from "better-sqlite3";
 import path from "node:path";
 import fs from "node:fs";
-import { fileURLToPath } from "node:url";
+import { PROJECT_ROOT } from "./projectRoot.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = path.resolve(__dirname, "../../data/.mj-memory.db");
+const DB_PATH = path.join(PROJECT_ROOT, "data/.gwen-memory.db");
+const LEGACY_DB_PATH = path.join(PROJECT_ROOT, "data/.mj-memory.db");
 
 let db = null;
 
 function ensureDb() {
   if (db) return db;
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+  // Migrate legacy .mj-memory.db → .gwen-memory.db on first run.
+  if (!fs.existsSync(DB_PATH) && fs.existsSync(LEGACY_DB_PATH)) {
+    fs.copyFileSync(LEGACY_DB_PATH, DB_PATH);
+  }
   db = new Database(DB_PATH);
   db.pragma("journal_mode = WAL");
   db.exec(`

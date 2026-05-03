@@ -1,4 +1,4 @@
-# MJ — Skills Registry
+# Gwen — Skills Registry
 > Place this at `agents/SKILLS.md`
 > Skills are reusable capability units that agents can invoke.
 > A Skill = a focused capability with defined input, output, and rules.
@@ -273,7 +273,7 @@ function startReminderLoop(intervalMs?: number): void  // default 30min
 - Uses `node-cron` for scheduling
 - Fires `speak()` + system notification via `node-notifier`
 - Reminders fire: 1 hour before + at due time
-- `startReminderLoop` called on MJ startup from `electron/main.js`
+- `startReminderLoop` called on Gwen startup from `electron/main.js`
 
 **Dependencies:** `node-cron`, `node-notifier`
 
@@ -346,7 +346,7 @@ speaking  → green #00ff88,  audio-reactive, 5000 particles
 ```
 
 **Details:**
-- Subscribes to IPC events via `window.mjBridge` (preload contextBridge)
+- Subscribes to IPC events via `window.gwenBridge` (preload contextBridge)
 - Smoothly interpolates between states (no hard cuts)
 - `audioLevel` (0–1) drives particle displacement in `speaking` state
 - Uses `lerp` for all value transitions

@@ -9,14 +9,14 @@ export default function Transcript() {
   const containerRef = useRef(null);
 
   useEffect(() => {
-    if (!window.mjBridge) return;
-    const u1 = window.mjBridge.onTranscript(({ role, text }) => {
+    if (!window.gwenBridge) return;
+    const u1 = window.gwenBridge.onTranscript(({ role, text }) => {
       setLines((prev) => {
         const next = [...prev, { role, text, ts: Date.now() }];
         return next.slice(-MAX_LINES);
       });
     });
-    const u2 = window.mjBridge.onCodeOutput((chunk) => {
+    const u2 = window.gwenBridge.onCodeOutput((chunk) => {
       setCodeOutput((prev) => (prev + chunk).slice(-2000));
     });
     return () => {
@@ -45,7 +45,7 @@ export default function Transcript() {
               opacity,
             }}
           >
-            <span style={styles.role}>{l.role === "user" ? "you" : "MJ"}</span>
+            <span style={styles.role}>{l.role === "user" ? "you" : "Gwen"}</span>
             <span style={styles.text}>{l.text}</span>
           </div>
         );

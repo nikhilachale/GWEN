@@ -78,24 +78,24 @@ function setState(next) {
   if (currentState === next) return;
   currentState = next;
   ipc.sendState(next);
-  console.log(`[mj] state → ${next}`);
+  console.log(`[gwen] state → ${next}`);
 }
 
-global.getMjState = () => currentState; // exposed for notify skill
+global.getGwenState = () => currentState; // exposed for notify skill
 
 // ─── Voice turn ───────────────────────────────────────────────────────
 async function runVoiceTurn() {
   if (currentState !== "idle") {
-    console.log("[mj] ignoring trigger — already in", currentState);
+    console.log("[gwen] ignoring trigger — already in", currentState);
     return;
   }
 
   try {
     setState("listening");
-    const transcript = await listener.transcribeAudio(8000);
+    const transcript = await listener.transcribeAudio(15000);
 
     if (!transcript) {
-      console.log("[mj] silence — back to idle");
+      console.log("[gwen] silence — back to idle");
       setState("idle");
       return;
     }
@@ -106,7 +106,7 @@ async function runVoiceTurn() {
     // Pre-routing hint (optional)
     const intentHint = intent.detectIntent(transcript);
     if (intentHint && intentHint.confidence >= 0.7) {
-      console.log(`[mj] intent: ${intentHint.type} (${intentHint.confidence})`);
+      console.log(`[gwen] intent: ${intentHint.type} (${intentHint.confidence})`);
     }
 
     const reply = await brain.runBrain(transcript, { intentHint });
@@ -118,7 +118,7 @@ async function runVoiceTurn() {
 
     setState("idle");
   } catch (err) {
-    console.error("[mj] voice turn failed:", err);
+    console.error("[gwen] voice turn failed:", err);
     try {
       await speaker.speak("Something went wrong on my end.");
     } catch {}
@@ -132,26 +132,62 @@ app.whenReady().then(async () => {
   await loadCore();
 
   // Manual trigger from renderer (clicking the orb / mic button)
-  ipcMain.on("mj:trigger", () => {
+  ipcMain.on("gwen:trigger", () => {
     runVoiceTurn();
   });
 
   // Get-state probe for renderer on mount
-  ipcMain.handle("mj:get-state", () => currentState);
+  ipcMain.handle("gwen:get-state", () => currentState);
 
   // Reminder loop
   notify.startReminderLoop();
 
   ipc.sendState("idle");
 
-  // Startup greeting
-  const greeting = process.env.MJ_GREETING || "Hi Nikhil. MJ online.";
-  setState("speaking");
-  ipc.sendTranscript("assistant", greeting);
+  // Startup briefing — Gwen composes it herself using her tools.
+  setState("thinking");
+
+  // Recall the user's city so the briefing weather is for the right place.
+  // wttr.in's IP geolocation is unreliable from datacenter/VPN ranges.
+  let storedCity = null;
   try {
-    await speaker.speakStream(greeting, (level) => ipc.sendAudioLevel(level));
+    const memoryMod = await import("../src/tools/memory.js");
+    const recalled = await memoryMod.recall({ key: "user_city" });
+    if (typeof recalled === "string" && !recalled.startsWith("I don't")) {
+      storedCity = recalled;
+    }
   } catch (err) {
-    console.warn("[mj] greeting failed:", err.message);
+    console.warn("[gwen] city recall failed:", err.message);
+  }
+
+  const cityLine = storedCity
+    ? `The user's city is ${storedCity} — call get_weather with location="${storedCity}". `
+    : `You don't know the user's city yet — skip weather, and at the end ask "where are you based?" so you can remember it for next time. `;
+
+  const briefingPrompt =
+    "Startup briefing. Greet Nikhil by name. Tell him today's date in a natural way. " +
+    cityLine +
+    "Then check his calendar for today, his tasks, and his Reminders. " +
+    "If he has anything pending, name them concisely and ask when he wants to do " +
+    "what. If he has nothing, ask what he wants to do today. " +
+    "Keep it under five short sentences. No preamble — go straight into the greeting.";
+
+  let briefing;
+  try {
+    briefing = await brain.runBrain(briefingPrompt);
+  } catch (err) {
+    console.warn("[gwen] briefing failed:", err.message);
+    briefing = "Hi Nikhil. Gwen online.";
+  }
+  // Synthetic startup turn shouldn't pollute conversation history.
+  brain.resetConversation();
+
+  setState("speaking");
+  ipc.sendTranscript("assistant", briefing);
+  try {
+    await speaker.speakStream(briefing, (level) => ipc.sendAudioLevel(level));
+  } catch (err) {
+    console.warn("[gwen] greeting failed:", err.message);
   }
   setState("idle");
 });

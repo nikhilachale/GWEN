@@ -75,17 +75,17 @@ export async function getAuthClient() {
 export function isTokenValid() {
   try {
     if (!fs.existsSync(TOKEN_PATH)) {
-      if (process.env.MJ_DEBUG_OAUTH) console.warn(`[oauth] no token at ${TOKEN_PATH}`);
+      if (process.env.GWEN_DEBUG_OAUTH) console.warn(`[oauth] no token at ${TOKEN_PATH}`);
       return false;
     }
     const tokens = JSON.parse(fs.readFileSync(TOKEN_PATH, "utf8"));
     const ok = !!(tokens && (tokens.refresh_token || tokens.access_token));
-    if (!ok && process.env.MJ_DEBUG_OAUTH) {
+    if (!ok && process.env.GWEN_DEBUG_OAUTH) {
       console.warn(`[oauth] token at ${TOKEN_PATH} missing required fields`);
     }
     return ok;
   } catch (err) {
-    if (process.env.MJ_DEBUG_OAUTH) console.warn(`[oauth] token read failed:`, err.message);
+    if (process.env.GWEN_DEBUG_OAUTH) console.warn(`[oauth] token read failed:`, err.message);
     return false;
   }
 }

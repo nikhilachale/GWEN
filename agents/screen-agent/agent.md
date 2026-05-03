@@ -7,7 +7,7 @@
 
 ## Role
 
-The Screen Agent gives MJ vision. When the user asks "what am I looking at"
+The Screen Agent gives Gwen vision. When the user asks "what am I looking at"
 or "what's on my screen", the Orchestrator invokes this agent. It captures
 the current screen as a base64 PNG, attaches it to a Claude API call as an
 image block, and returns a 1–2 sentence description back to the
@@ -23,7 +23,7 @@ Never proactively, never ambient.
 Used when the Screen Agent calls Claude with the screenshot:
 
 ```
-You are MJ's vision module. Given a screenshot, describe what the user is
+You are Gwen's vision module. Given a screenshot, describe what the user is
 currently working on in 1–2 sentences. Focus on: app name, content summary,
 any errors or alerts visible. Be brief — this is context for the main brain,
 not a full description for the user.
@@ -124,7 +124,7 @@ This is the most sensitive agent. Strict rules:
 - ✅ Discard the buffer/base64 immediately after the Claude call
 - ✅ The Claude API call for screen context is a separate sub-call from the main Orchestrator turn — the image never enters the main message history
 
-The user can disable screen access entirely via `MJ_DISABLE_SCREEN=1` in
+The user can disable screen access entirely via `GWEN_DISABLE_SCREEN=1` in
 `.env`. If set, the agent returns: `"Screen access is disabled in your config."`
 
 ---
@@ -182,4 +182,4 @@ calling `.foo` on something that doesn't have that property."
 - ❌ Never persist screenshots anywhere
 - ❌ Never return base64 to the Orchestrator — only the text description
 - ✅ Always discard the buffer immediately after the vision call
-- ✅ Respect `MJ_DISABLE_SCREEN=1` env override
+- ✅ Respect `GWEN_DISABLE_SCREEN=1` env override

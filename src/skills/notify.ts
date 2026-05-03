@@ -65,13 +65,13 @@ async function fireReminder(task, kind) {
   const message = kind === "at-due" ? `Now: ${task.text}` : `In about an hour: ${task.text}`;
 
   notifier.notify({
-    title: "MJ Reminder",
+    title: "Gwen Reminder",
     message,
     sound: false,
     timeout: 6,
   });
 
-  const mjState = global.getMjState ? global.getMjState() : "idle";
+  const mjState = global.getGwenState ? global.getGwenState() : "idle";
   if (mjState === "idle") {
     const phrase = kind === "at-due"
       ? `Reminder — ${task.text}, now.`

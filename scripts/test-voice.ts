@@ -23,7 +23,7 @@ const speakCalls = [];
 
 const fullReply = await runBrainStream(text, (sentence) => {
   if (!firstSentenceAt) firstSentenceAt = Date.now();
-  console.log(`MJ: ${sentence}`);
+  console.log(`Gwen: ${sentence}`);
   // Fire each speak() immediately — synthesis runs in parallel,
   // playback is serialized by the internal queue inside tts.js.
   speakCalls.push(speak(sentence));

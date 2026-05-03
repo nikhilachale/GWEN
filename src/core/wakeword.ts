@@ -1,8 +1,8 @@
-// src/core/wakeword.js — "Hey MJ" hands-free wake word.
-// Disabled by default — MJ falls back to the manual mic button (mj:trigger IPC).
+// src/core/wakeword.js — "Hey Gwen" hands-free wake word.
+// Disabled by default — Gwen falls back to the manual mic button (gwen:trigger IPC).
 // To enable hands-free:
 //   1. Get a free key from https://console.picovoice.ai/
-//   2. Train a custom keyword and save the .ppn at data/wakewords/hey-mj.ppn
+//   2. Train a custom keyword and save the .ppn at data/wakewords/hey-gwen.ppn
 //   3. Set PORCUPINE_ACCESS_KEY in .env
 //   4. npm i @picovoice/porcupine-node @picovoice/pvrecorder-node
 
@@ -27,9 +27,14 @@ class WakeWordDetector extends EventEmitter {
       const fs = await import("node:fs");
       const path = await import("node:path");
 
-      const keywordPath = path.join(process.cwd(), "data", "wakewords", "hey-mj.ppn");
+      const wakewordsDir = path.join(process.cwd(), "data", "wakewords");
+      const newPath = path.join(wakewordsDir, "hey-gwen.ppn");
+      const legacyPath = path.join(wakewordsDir, "hey-mj.ppn");
+      const keywordPath = fs.existsSync(newPath)
+        ? newPath
+        : (fs.existsSync(legacyPath) ? legacyPath : newPath);
       if (!fs.existsSync(keywordPath)) {
-        console.log("[wakeword] keyword file missing at data/wakewords/hey-mj.ppn — wake word disabled");
+        console.log("[wakeword] keyword file missing at data/wakewords/hey-gwen.ppn — wake word disabled");
         return;
       }
 
@@ -43,7 +48,7 @@ class WakeWordDetector extends EventEmitter {
       this.running = true;
 
       this.loop();
-      console.log("[wakeword] listening for 'Hey MJ'");
+      console.log("[wakeword] listening for 'Hey Gwen'");
     } catch (err) {
       console.warn("[wakeword] failed to start:", err.message);
     }

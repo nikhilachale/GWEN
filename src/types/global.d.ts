@@ -4,10 +4,10 @@ export {};
 
 declare global {
   var mainWindow: BrowserWindow | null | undefined;
-  var getMjState: (() => string) | undefined;
+  var getGwenState: (() => string) | undefined;
 
   interface Window {
-    mjBridge?: {
+    gwenBridge?: {
       onState: (cb: (state: string) => void) => () => void;
       onTranscript: (cb: (entry: unknown) => void) => () => void;
       onAudioLevel: (cb: (level: number) => void) => () => void;

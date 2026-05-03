@@ -9,6 +9,8 @@ import * as notesTool    from "../tools/notes.js";
 import * as memoryTool   from "../tools/memory.js";
 import * as dayPlanTool  from "../tools/dayplan.js";
 import * as codegenTool  from "../tools/codegen.js";
+import * as selfFixTool  from "../tools/selfFix.js";
+import * as repairSelfTool from "../tools/repairSelf.js";
 import * as macTool      from "../tools/macControl.js";
 import * as filesTool    from "../tools/files.js";
 import * as systemTool   from "../tools/system.js";
@@ -22,10 +24,10 @@ import * as timersTool   from "../tools/timers.js";
 import * as weatherTool  from "../tools/weather.js";
 import * as screenCore   from "./screen.js";
 
-const MODEL = process.env.MJ_BRAIN_MODEL || "claude-sonnet-4-6";
+const MODEL = process.env.GWEN_BRAIN_MODEL || "claude-sonnet-4-6";
 const MAX_TOOL_TURNS = 8;
 
-// Conversation context: keep the last N user/assistant text exchanges so MJ
+// Conversation context: keep the last N user/assistant text exchanges so Gwen
 // can answer follow-ups like "and tomorrow?" or "what about the second one?".
 // Tool calls/results are dropped from history to keep token cost flat.
 const MAX_HISTORY_MESSAGES = 20;            // 10 user/assistant pairs
@@ -181,6 +183,44 @@ const TOOLS = [
         framework: { type: "string" },
       },
       required: ["request"],
+    },
+  },
+  {
+    name: "fix_self_code",
+    description: "Fix or modify Gwen's own source code by spawning Claude Code inside this project. Use when the user reports a bug in Gwen herself, asks you to change your own behavior, or asks to add/tweak a feature in your code. Always confirm the change in one sentence and wait for approval before calling.",
+    input_schema: {
+      type: "object",
+      properties: {
+        description: {
+          type: "string",
+          description: "What to fix or change. Be specific — name the symptom and any relevant file/function if known.",
+        },
+        files: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional paths to focus on, relative to project root.",
+        },
+      },
+      required: ["description"],
+    },
+  },
+  {
+    name: "repair_self",
+    description: "Run a maintenance command on Gwen's own install (rebuild native modules, reinstall dependencies, clear build cache). Use this when Gwen herself fails to start a feature due to an env/build issue — e.g. better-sqlite3 ABI mismatch, missing module after a dependency change, stale build output. Distinct from fix_self_code, which edits source. Always confirm with the user before calling.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["rebuild_electron", "npm_install", "clear_cache"],
+          description: "rebuild_electron: rebuild native modules against Electron's ABI (fixes better-sqlite3 errors). npm_install: reinstall node_modules. clear_cache: remove dist/dist-electron/vite cache.",
+        },
+        relaunch: {
+          type: "boolean",
+          description: "Restart Gwen after the command finishes. Defaults to the action's recommended setting.",
+        },
+      },
+      required: ["action"],
     },
   },
   {
@@ -386,7 +426,7 @@ const TOOLS = [
   },
   {
     name: "add_reminder",
-    description: "Add a reminder to the macOS Reminders.app (iCloud-synced). Distinct from add_task which uses MJ's local store. Use this when the user says 'remind me'.",
+    description: "Add a reminder to the macOS Reminders.app (iCloud-synced). Distinct from add_task which uses Gwen's local store. Use this when the user says 'remind me'.",
     input_schema: {
       type: "object",
       properties: {
@@ -481,7 +521,7 @@ const TOOLS = [
   },
   {
     name: "set_timer",
-    description: "Start a countdown timer. MJ will play a notification when it fires.",
+    description: "Start a countdown timer. Gwen will play a notification when it fires.",
     input_schema: {
       type: "object",
       properties: {
@@ -542,6 +582,8 @@ const handlers = {
   recall:             (i) => memoryTool.recall(i),
   get_day_plan:       (i) => dayPlanTool.run(i),
   build_software:     (i) => codegenTool.run(i),
+  fix_self_code:      (i) => selfFixTool.run(i),
+  repair_self:        (i) => repairSelfTool.run(i),
   get_screen_context: (i) => screenCore.getScreenContext(i?.focus),
   open_app:           (i) => macTool.openApp(i),
   type_text:          (i) => macTool.typeText(i),
@@ -581,11 +623,12 @@ const handlers = {
 // ─── System prompt ───────────────────────────────────────────────────
 function buildSystemPrompt({ userName, intentHint }) {
   const date = new Date().toDateString();
-  let prompt = `You are MJ, a JARVIS-style AI assistant. You are sharp, witty, confident, loyal.
-Your voice is calm and dry. You address the user as "sir" or by name, sparingly.
+  const name = userName || "Nikhil";
+  let prompt = `You are Gwen, a JARVIS-style AI assistant. You are sharp, witty, confident, loyal.
+Your voice is calm and dry. You address the user as ${name}, sparingly.
 You think one step ahead and offer the next useful action without being asked.
 
-Today is ${date}. The user's name is ${userName || "sir"}.
+Today is ${date}. The user's name is ${name}. Always remember this — never ask for it.
 
 You speak — never write. Output is fed straight to text-to-speech, so:
 - No markdown, bullets, headers, code blocks, or emoji
@@ -613,12 +656,30 @@ Response length — match the request. This is the most important rule:
 Before any send_imessage or send_whatsapp call, repeat the contact and the
 message back in one short sentence and wait for "yes" / "send it" before sending.
 
+Before any fix_self_code call, repeat the change you're about to make in one
+short sentence and wait for "yes" / "do it" / "go ahead" before calling. The
+moment the user confirms, you MUST invoke fix_self_code on the same turn — do
+not say "fixing now" or "done" without actually calling the tool. The tool's
+return string is your evidence the work happened; if you didn't call it,
+nothing happened. After it runs, tell the user to restart with npm run dev to
+load the change.
+
+Before any repair_self call, name the action in one short sentence and wait for
+"yes" / "do it" before calling. If relaunch is true, warn the user that you'll
+restart yourself.
+
 Tool routing:
 - time, schedule, meetings → get_calendar
 - inbox, mail, messages from email → get_emails
 - "remember that..." → remember
 - "what do I prefer..." or recalling user info → recall first
 - "build / create / make me" software → build_software
+- "you're broken" / "fix yourself" / "change how you do X" / any complaint about
+  Gwen's own behavior or code → fix_self_code (confirm the change first)
+- native module errors ("better-sqlite3 was compiled against...", "Module did not
+  self-register", ABI mismatch), missing-dependency errors, or build cache issues
+  → repair_self (confirm the action first). Use rebuild_electron for native ABI
+  errors, npm_install after a dependency change, clear_cache for stale builds.
 - "what's on my screen" → get_screen_context
 - "open / launch / start" an app → open_app
 - "what's in [folder]", "list my desktop", "show me downloads" → list_files
@@ -650,7 +711,13 @@ Tool routing:
 - "set a timer for N minutes" → set_timer
 - "wake me at..." / "alarm for..." → set_alarm
 - "cancel the timer" / "stop alarms" → cancel_timer
-- weather, forecast, "how hot is it" → get_weather
+- weather, forecast, "how hot is it" → get_weather. ALWAYS recall("user_city")
+  first and pass it as the location. Never call get_weather with no location —
+  IP geolocation is unreliable. If no city is stored, ask the user where they
+  are and remember("user_city", <city>) before calling get_weather.
+- user mentions where they live, are based, or are visiting (e.g. "I'm in
+  Pune", "I live in Bangalore") → remember("user_city", <city>) silently, then
+  continue the conversation. No need to confirm.
 - translation, definitions, unit conversions, simple math → answer directly,
   no tool needed
 - current events, facts you're unsure of → search_web
@@ -681,7 +748,7 @@ work and offer the next sensible step.`;
  * @returns {Promise<string>} Final spoken text.
  */
 export async function runBrain(userInput, opts = {}) {
-  const userName = await safeRecall("user_name");
+  const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Nikhil";
   const system = buildSystemPrompt({ userName, intentHint: opts.intentHint });
 
   const messages = [...getHistoryForTurn(), { role: "user", content: userInput }];
@@ -749,7 +816,7 @@ export async function runBrain(userInput, opts = {}) {
  * @returns {Promise<string>}
  */
 export async function runBrainStream(userInput, onSentence = () => {}, opts = {}) {
-  const userName = await safeRecall("user_name");
+  const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Nikhil";
   const system = buildSystemPrompt({ userName, intentHint: opts.intentHint });
   const messages = [...getHistoryForTurn(), { role: "user", content: userInput }];
 

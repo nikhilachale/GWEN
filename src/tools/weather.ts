@@ -10,7 +10,7 @@ export async function getWeather({ location = "", days = 1 } = {}) {
   const loc = encodeURIComponent(location);
   const url = `https://wttr.in/${loc}?format=j1`;
   try {
-    const res = await fetch(url, { headers: { "User-Agent": "MJ-Assistant" } });
+    const res = await fetch(url, { headers: { "User-Agent": "Gwen-Assistant" } });
     if (!res.ok) return `Weather lookup failed (${res.status}).`;
     const data = await res.json();
     const cur = data.current_condition?.[0];

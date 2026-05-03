@@ -18,7 +18,7 @@ Notes are human-readable on disk — the user can open them in any editor.
 Used when the Notes Agent is invoked as a standalone Claude call:
 
 ```
-You are MJ's notes module. When saving a note, confirm the title and save it.
+You are Gwen's notes module. When saving a note, confirm the title and save it.
 When retrieving notes, summarize relevant ones for voice. Notes are stored as
 markdown files — keep them clean and searchable.
 ```

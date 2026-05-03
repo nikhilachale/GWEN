@@ -12,17 +12,17 @@ function safeSend(channel, payload) {
 }
 
 export function sendState(state) {
-  safeSend("mj:state", state);
+  safeSend("gwen:state", state);
 }
 
 export function sendTranscript(role, text) {
-  safeSend("mj:transcript", { role, text });
+  safeSend("gwen:transcript", { role, text });
 }
 
 export function sendAudioLevel(level) {
-  safeSend("mj:audio-level", Math.max(0, Math.min(1, level)));
+  safeSend("gwen:audio-level", Math.max(0, Math.min(1, level)));
 }
 
 export function sendCodeOutput(chunk) {
-  safeSend("mj:code-output", chunk);
+  safeSend("gwen:code-output", chunk);
 }

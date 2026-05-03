@@ -7,10 +7,10 @@
 
 ## Role
 
-The Memory Agent is MJ's long-term memory. It stores user preferences,
-facts the user has explicitly told MJ to remember, and seed values
+The Memory Agent is Gwen's long-term memory. It stores user preferences,
+facts the user has explicitly told Gwen to remember, and seed values
 collected on first run. Memory is keyed and lives in SQLite at
-`data/.mj-memory.db`.
+`data/.gwen-memory.db`.
 
 This is **not** conversation history — only structured key-value facts.
 The Orchestrator uses `recall` proactively before guessing user
@@ -23,7 +23,7 @@ preferences.
 Used when the Memory Agent is invoked as a standalone Claude call:
 
 ```
-You are MJ's memory module. Store facts and preferences the user tells you.
+You are Gwen's memory module. Store facts and preferences the user tells you.
 When recalling, return the exact stored value naturally in a sentence.
 If not found, say so and offer to store it.
 ```
@@ -94,7 +94,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_category ON memory(category);
 
 ## Pre-seeded Keys
 
-On first run, MJ asks for and stores these:
+On first run, Gwen asks for and stores these:
 
 | Key | Prompt | Category |
 |---|---|---|
@@ -135,7 +135,7 @@ conventions when storing new memories.
 → "Got it. Dark mode it is."
 
 **User:** "What's my top priority right now?"
-**Orchestrator** → `recall({ key: "top_priority" })` → "Shipping the MJ v1
+**Orchestrator** → `recall({ key: "top_priority" })` → "Shipping the Gwen v1
 release — that's what you told me last week."
 
 **User:** "Forget my location."

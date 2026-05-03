@@ -5,16 +5,16 @@ import fs from "node:fs";
 import { createWriteStream } from "node:fs";
 import { execSync } from "node:child_process";
 
-const TMP_PATH = "/tmp/mj_input.wav";
-const SILENCE_THRESHOLD_MS = 1200;
+const TMP_PATH = "/tmp/gwen_input.wav";
+const SILENCE_THRESHOLD_MS = 1500;
 const SAMPLE_RATE = 16000;
-const MODEL_NAME = process.env.MJ_WHISPER_MODEL || "base.en";
-const GROQ_MODEL = process.env.MJ_GROQ_STT_MODEL || "whisper-large-v3-turbo";
+const MODEL_NAME = process.env.GWEN_WHISPER_MODEL || "base.en";
+const GROQ_MODEL = process.env.GWEN_GROQ_STT_MODEL || "whisper-large-v3-turbo";
 
-// Vocabulary biasing — names, apps, and terms MJ should recognize correctly.
-// Override with MJ_STT_PROMPT in .env.
+// Vocabulary biasing — names, apps, and terms Gwen should recognize correctly.
+// Override with GWEN_STT_PROMPT in .env.
 const STT_PROMPT =
-  process.env.MJ_STT_PROMPT ||
+  process.env.GWEN_STT_PROMPT ||
   "Gwen, Nikhil, Achale, WhatsApp, iMessage, FaceTime, " +
   "Spotify, Tavily, Anthropic, Claude, IPL, Mumbai, Bangalore, Chennai.";
 
@@ -26,7 +26,7 @@ async function patchShellExecPath() {
   if (_shellPatched) return;
   try {
     const nodePath =
-      process.env.MJ_NODE_PATH ||
+      process.env.GWEN_NODE_PATH ||
       tryWhich("node") ||
       tryPath("/opt/homebrew/bin/node") ||
       tryPath("/usr/local/bin/node") ||
@@ -74,7 +74,7 @@ async function getOpenAI() {
  * @param {number} [maxMs=8000]
  * @returns {Promise<string>} transcript or "" if silence
  */
-export async function transcribeAudio(maxMs = 8000) {
+export async function transcribeAudio(maxMs = 15000) {
   try {
     await recordAudio(TMP_PATH, maxMs);
   } catch (err) {
@@ -188,8 +188,8 @@ function recordAudio(outPath, maxMs) {
       channels: 1,
       audioType: "raw",
       silence: `${(SILENCE_THRESHOLD_MS / 1000).toFixed(1)}`,
-      thresholdStart: 0.5,
-      thresholdEnd: 1.5,
+      thresholdStart: 3.0,
+      thresholdEnd: 2.0,
       endOnSilence: true,
     });
 

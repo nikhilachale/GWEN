@@ -1,5 +1,5 @@
 {
-  "name": "mj",
+  "name": "gwen",
   "version": "0.1.0",
   "description": "JARVIS-style voice-first AI assistant",
   "type": "module",
@@ -27,7 +27,7 @@
     "@mozilla/readability": "^0.6.0",
     "@react-three/fiber": "^8.17.10",
     "active-win": "^7.7.2",
-    "better-sqlite3": "^11.3.0",
+    "better-sqlite3": "^12.9.0",
     "chrono-node": "^2.7.7",
     "dotenv": "^16.4.5",
     "googleapis": "^171.4.0",
@@ -35,7 +35,7 @@
     "lucide-react": "^0.460.0",
     "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2",
-    "node-notifier": "^10.0.1",
+    "node-notifier": "^6.0.0",
     "node-record-lpcm16": "^1.0.1",
     "nodejs-whisper": "^0.2.9",
     "open": "^10.1.0",
@@ -47,7 +47,7 @@
     "three": "^0.170.0"
   },
   "devDependencies": {
-    "@electron/rebuild": "^0.0.0",
+    "@electron/rebuild": "^3.6.0",
     "@vitejs/plugin-react": "^5.2.0",
     "concurrently": "^9.1.0",
     "cross-env": "^7.0.3",
@@ -58,8 +58,8 @@
     "wait-on": "^8.0.1"
   },
   "build": {
-    "appId": "com.mj.assistant",
-    "productName": "MJ",
+    "appId": "com.gwen.assistant",
+    "productName": "Gwen",
     "files": [
       "dist-electron/**/*",
       "dist/**/*",

@@ -1,5 +1,5 @@
 // src/tools/timers.js — in-process timers and alarms with macOS notifications.
-// Timers do NOT survive an MJ restart. For persistent recurring alarms, use a
+// Timers do NOT survive an Gwen restart. For persistent recurring alarms, use a
 // Shortcut + run_shortcut, or a Calendar event.
 import { exec } from "node:child_process";
 import * as chrono from "chrono-node";

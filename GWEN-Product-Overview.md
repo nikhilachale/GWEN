@@ -1,4 +1,4 @@
-# MJ
+# Gwen
 
 **A JARVIS-Style AI Assistant**
 
@@ -11,15 +11,15 @@
 
 ## 1. Executive Summary
 
-MJ is a voice-first, always-on AI desktop assistant — a personal JARVIS. You talk to it; it talks back. It runs as a native desktop application, listens for a wake word, and routes your speech to a Claude-powered orchestrator that decides which tools to use and what to say.
+Gwen is a voice-first, always-on AI desktop assistant — a personal JARVIS. You talk to it; it talks back. It runs as a native desktop application, listens for a wake word, and routes your speech to a Claude-powered orchestrator that decides which tools to use and what to say.
 
-Unlike a chatbot in a browser tab, MJ is ambient. It lives at the edge of your desk, always ready. It knows your calendar, reads your inbox (read-only), tracks your tasks, remembers your preferences, can search the web, can see your screen on demand, and can spawn Claude Code to build software for you — all through natural conversation.
+Unlike a chatbot in a browser tab, Gwen is ambient. It lives at the edge of your desk, always ready. It knows your calendar, reads your inbox (read-only), tracks your tasks, remembers your preferences, can search the web, can see your screen on demand, and can spawn Claude Code to build software for you — all through natural conversation.
 
-The visual centerpiece is an audio-reactive Three.js particle orb that pulses with MJ's voice and changes color by state: cyan when idle, white when listening, amber when thinking, green when speaking.
+The visual centerpiece is an audio-reactive Three.js particle orb that pulses with Gwen's voice and changes color by state: cyan when idle, white when listening, amber when thinking, green when speaking.
 
 ### Why this exists
 
-Three reasons. First — the cognitive overhead of switching between calendar, email, notes, and search apps is real. A single voice interface that pulls from all of them is meaningfully faster. Second — Claude is good enough at tool-use now that JARVIS-style orchestration is no longer science fiction; it's a weekend project. Third — owning the agent (vs renting one from a SaaS) means MJ can hold years of personal context without leaking it to a third party.
+Three reasons. First — the cognitive overhead of switching between calendar, email, notes, and search apps is real. A single voice interface that pulls from all of them is meaningfully faster. Second — Claude is good enough at tool-use now that JARVIS-style orchestration is no longer science fiction; it's a weekend project. Third — owning the agent (vs renting one from a SaaS) means Gwen can hold years of personal context without leaking it to a third party.
 
 ---
 
@@ -29,7 +29,7 @@ Five non-negotiable principles guide every decision in this project.
 
 ### 1. Voice-first, not voice-also
 
-MJ is designed to be spoken to. Every response is shaped for the ear, not the eye. No markdown bullet points read aloud; no URLs spoken verbatim; no raw timestamps. 1–3 sentences by default. The orb is the only visual.
+Gwen is designed to be spoken to. Every response is shaped for the ear, not the eye. No markdown bullet points read aloud; no URLs spoken verbatim; no raw timestamps. 1–3 sentences by default. The orb is the only visual.
 
 ### 2. Local where it can be, cloud where it must be
 
@@ -37,7 +37,7 @@ Memory, tasks, notes, and the SQLite store all live on disk. Whisper, Claude, an
 
 ### 3. Read-only by default
 
-Gmail is read-only — MJ literally cannot send mail because it doesn't request the scope. Calendar is read-only. Claude Code never auto-runs the software it builds. The default posture is observer, not actor.
+Gmail is read-only — Gwen literally cannot send mail because it doesn't request the scope. Calendar is read-only. Claude Code never auto-runs the software it builds. The default posture is observer, not actor.
 
 ### 4. Hub-and-spoke, not free-for-all
 
@@ -45,20 +45,20 @@ There is one orchestrator. Sub-agents are scoped and have limited tool access. T
 
 ### 5. Graceful degradation
 
-Every tool returns a friendly fallback string instead of throwing. Missing API key? MJ tells you what to set up. Network down? MJ says so and moves on. The voice loop never crashes.
+Every tool returns a friendly fallback string instead of throwing. Missing API key? Gwen tells you what to set up. Network down? Gwen says so and moves on. The voice loop never crashes.
 
 ---
 
 ## 3. Feature List
 
-Everything MJ can do, organized by capability area.
+Everything Gwen can do, organized by capability area.
 
 ### Voice interaction
 
-- Wake word detection ("Hey MJ") via Picovoice Porcupine — always-on, low-power
+- Wake word detection ("Hey Gwen") via Picovoice Porcupine — always-on, low-power
 - Speech-to-text via OpenAI Whisper, with automatic silence detection
 - Text-to-speech via ElevenLabs streaming API, JARVIS-style voice
-- Audio-reactive orb visualization that pulses with MJ's speech
+- Audio-reactive orb visualization that pulses with Gwen's speech
 - Manual click-to-talk fallback if wake word fails or isn't configured
 
 ### Productivity
@@ -93,14 +93,14 @@ Everything MJ can do, organized by capability area.
 
 - Spawn Claude Code as a subprocess to build apps, scripts, or websites
 - Voice request → composed prompt → live build output streamed to UI
-- Default save location: `~/MJ-projects/<slug>/`
+- Default save location: `~/Gwen-projects/<slug>/`
 - Never auto-runs the built code; never auto-installs dependencies
 
 ---
 
 ## 4. Technology Stack
 
-Every layer of MJ in one table. JavaScript-only — no Python, no TypeScript.
+Every layer of Gwen in one table. JavaScript-only — no Python, no TypeScript.
 
 | Layer | Technology | Why it's here |
 |---|---|---|
@@ -124,7 +124,7 @@ Every layer of MJ in one table. JavaScript-only — no Python, no TypeScript.
 
 ## 5. Architecture
 
-MJ uses a hub-and-spoke topology. The orchestrator is the only entry point; sub-agents are scoped behind tool definitions.
+Gwen uses a hub-and-spoke topology. The orchestrator is the only entry point; sub-agents are scoped behind tool definitions.
 
 ### Runtime flow
 
@@ -147,7 +147,7 @@ The codebase has three crisp layers, each with a single responsibility.
 The repo lays out cleanly:
 
 ```
-mj/
+gwen/
 ├── CLAUDE.md                  ← master instructions for Claude Code
 ├── electron/                  ← main process + preload
 ├── src/
@@ -236,13 +236,13 @@ All foundational systems are built and the voice loop runs end-to-end with click
 
 ### ◐ Stubbed — Code path exists, needs configuration
 
-- Wake word "Hey MJ" — needs Porcupine `.ppn` file + access key
+- Wake word "Hey Gwen" — needs Porcupine `.ppn` file + access key
 
 ### ✗ Remaining work
 
 #### Must-do for daily-driver feel
 
-- **Wake word integration:** train custom keyword at console.picovoice.ai, drop the `.ppn` file at `data/wakewords/hey-mj.ppn`, add `PORCUPINE_ACCESS_KEY` to `.env`, install the two Picovoice npm packages, wire `wakeWord.start()` into `electron/main.js`. *Estimated effort: 1 hour.*
+- **Wake word integration:** train custom keyword at console.picovoice.ai, drop the `.ppn` file at `data/wakewords/hey-gwen.ppn`, add `PORCUPINE_ACCESS_KEY` to `.env`, install the two Picovoice npm packages, wire `wakeWord.start()` into `electron/main.js`. *Estimated effort: 1 hour.*
 - **First-time machine setup pass:** install sox, grant mic and screen-recording permissions, verify better-sqlite3 native build. *Estimated effort: 2 hours of debugging.*
 - **First-run onboarding flow:** ask name, location, work hours, top priority on first boot, store in memory. Currently you'd configure these via voice. *Estimated effort: 2 hours.*
 - **Conversation memory across turns:** maintain message history between voice turns so follow-ups like "what about next week?" work. *Estimated effort: 1 hour.*
@@ -284,13 +284,13 @@ From scaffold-in-hand to shareable product, with honest estimates.
 
 ### Required API keys
 
-At minimum, MJ needs three keys to start producing voice output:
+At minimum, Gwen needs three keys to start producing voice output:
 
 - `ANTHROPIC_KEY` — for the brain
 - `OPENAI_KEY` — for Whisper transcription
 - `ELEVEN_KEY` plus `ELEVEN_VOICE_ID` — for speech output
 
-Optional: Google OAuth (calendar + email), Tavily (search), Porcupine (wake word). MJ degrades gracefully without any of these.
+Optional: Google OAuth (calendar + email), Tavily (search), Porcupine (wake word). Gwen degrades gracefully without any of these.
 
 ### Boot sequence
 
@@ -305,7 +305,7 @@ First boot will likely surface platform-specific permission prompts — mic on e
 
 ---
 
-## 11. Hard Rules — Things MJ Will Never Do
+## 11. Hard Rules — Things Gwen Will Never Do
 
 These are non-negotiable constraints baked into the architecture.
 
@@ -325,11 +325,11 @@ These are non-negotiable constraints baked into the architecture.
 
 ## 12. Closing Notes
 
-MJ is built to be lived with, not demoed. The point isn't to impress anyone — it's to remove the friction between thinking of something and acting on it.
+Gwen is built to be lived with, not demoed. The point isn't to impress anyone — it's to remove the friction between thinking of something and acting on it.
 
 The architecture deliberately keeps the surface area small. Eleven agents. Twelve skills. Twelve tools. One orchestrator. One state machine. One orb. Everything else is plumbing.
 
-If something feels off after running it for a few days — a tool that should have fired but didn't, a reminder that came at the wrong time, a phrase MJ keeps mishearing — change it. The codebase is small enough to hold in your head, and every layer is documented.
+If something feels off after running it for a few days — a tool that should have fired but didn't, a reminder that came at the wrong time, a phrase Gwen keeps mishearing — change it. The codebase is small enough to hold in your head, and every layer is documented.
 
 > *"Sometimes you've got to run before you can walk."*
 >

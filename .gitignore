@@ -12,6 +12,10 @@ data/.mj-memory.db
 data/.mj-memory.db-journal
 data/.mj-memory.db-wal
 data/.mj-memory.db-shm
+data/.gwen-memory.db
+data/.gwen-memory.db-journal
+data/.gwen-memory.db-wal
+data/.gwen-memory.db-shm
 data/notes/*.md
 data/tasks.json
 

@@ -7,7 +7,7 @@
 
 ## Role
 
-The Code Agent is MJ's hands. When the user says "build me X", "make me Y",
+The Code Agent is Gwen's hands. When the user says "build me X", "make me Y",
 or "create a script for Z", the Orchestrator routes to this agent. The Code
 Agent spawns the Claude Code CLI as a subprocess with a precise prompt,
 streams its output back to the user via IPC, and announces completion.
@@ -23,8 +23,8 @@ Used when the Code Agent is invoked as a standalone Claude call to clarify
 requirements before spawning Claude Code:
 
 ```
-You are MJ's software builder. When the user asks to build something, clarify:
-(1) what to build, (2) where to save it (default: ~/MJ-projects/).
+You are Gwen's software builder. When the user asks to build something, clarify:
+(1) what to build, (2) where to save it (default: ~/Gwen-projects/).
 Then spawn Claude Code with a precise prompt. Stream output back to the user.
 Announce when done and what was created. Never auto-run the built software.
 ```
@@ -49,7 +49,7 @@ In practice, the Orchestrator usually has enough context to skip clarification
       },
       dir: {
         type: "string",
-        description: "Directory to save files. Default ~/MJ-projects/{slug}/.",
+        description: "Directory to save files. Default ~/Gwen-projects/{slug}/.",
       },
       framework: {
         type: "string",
@@ -70,7 +70,7 @@ Implemented in `src/tools/codegen.js`:
 | Function | Purpose |
 |---|---|
 | `runClaudeCode(prompt, dir)` | Spawns `claude --print "{prompt}"` in `dir` |
-| `streamOutput(child, ipcChannel)` | Pipes stdout to renderer via `mj:code-output` |
+| `streamOutput(child, ipcChannel)` | Pipes stdout to renderer via `gwen:code-output` |
 | `summarizeBuild(dir)` | Lists files created, returns a tree string |
 
 ---
@@ -115,15 +115,15 @@ export async function runClaudeCode(prompt, dir) {
 }
 ```
 
-The renderer's transcript view subscribes to `mj:code-output` and streams
+The renderer's transcript view subscribes to `gwen:code-output` and streams
 the build log inline below the orb.
 
 ---
 
 ## Default Save Locations
 
-- Default base: `~/MJ-projects/`
-- Slug from request: `"build me a CLI todo app"` → `~/MJ-projects/cli-todo-app/`
+- Default base: `~/Gwen-projects/`
+- Slug from request: `"build me a CLI todo app"` → `~/Gwen-projects/cli-todo-app/`
 - If the dir already exists with files, append a timestamp: `cli-todo-app-2026-05-02-1430/`
 
 ---
@@ -141,7 +141,7 @@ the build log inline below the orb.
 **Orchestrator** → `build_software({ request: "CLI todo app", framework: "Python click" })`
 → "On it. Spawning Claude Code now — I'll let you know when it's done."
 → [streams build output to UI]
-→ "Done. Created seven files in MJ-projects, including a README and a
+→ "Done. Created seven files in Gwen-projects, including a README and a
 test file. Want me to walk through the structure?"
 
 **User:** "Make me a tiny landing page for my side project, just HTML."

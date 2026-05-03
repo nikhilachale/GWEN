@@ -10,15 +10,15 @@ import playSoundFactory from "play-sound";
 
 const player = playSoundFactory({});
 const TMP_DIR = "/tmp";
-const VOICE = process.env.MJ_TTS_VOICE || "Daniel";
-const RATE = process.env.MJ_TTS_RATE || "185";
+const VOICE = process.env.GWEN_TTS_VOICE || "Daniel";
+const RATE = process.env.GWEN_TTS_RATE || "185";
 const FISH_ENDPOINT = process.env.FISH_ENDPOINT || "https://api.fish.audio/v1/tts";
 const FISH_LATENCY = process.env.FISH_LATENCY || "balanced";
 
 const STREAM_PLAYER = detectStreamPlayer();
 
 function detectStreamPlayer() {
-  const forced = process.env.MJ_STREAM_PLAYER;
+  const forced = process.env.GWEN_STREAM_PLAYER;
   const candidates = forced ? [forced] : ["ffplay", "mpv", "play", "mpg123"];
   for (const c of candidates) {
     try {
@@ -108,7 +108,7 @@ export async function speakStream(text, onLevel = () => {}) {
 }
 
 function pickProvider() {
-  const forced = (process.env.MJ_TTS_PROVIDER || "").toLowerCase();
+  const forced = (process.env.GWEN_TTS_PROVIDER || "").toLowerCase();
   if (forced === "fish" || forced === "eleven" || forced === "say") return forced;
   if (process.env.FISH_KEY) return "fish";
   if (process.env.ELEVEN_KEY && process.env.ELEVEN_VOICE_ID) return "eleven";

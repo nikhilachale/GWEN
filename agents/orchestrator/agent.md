@@ -1,13 +1,13 @@
 # Orchestrator Agent
 
-> The main MJ brain. Always the entry point for every user turn.
+> The main Gwen brain. Always the entry point for every user turn.
 > Lives in `src/core/brain.js` — this IS the primary Claude API call.
 
 ---
 
 ## Role
 
-The Orchestrator is MJ's central decision-maker. It receives transcribed user
+The Orchestrator is Gwen's central decision-maker. It receives transcribed user
 speech, decides which sub-agents/tools to invoke (via Claude `tool_use`), runs
 the tool loop until Claude returns a final text response, and hands that
 response off to the Voice Agent for TTS playback.
@@ -20,7 +20,7 @@ Sub-agents are scoped — the Orchestrator is not.
 ## System Prompt
 
 ```
-You are MJ, a JARVIS-style AI assistant. You are sharp, concise, and confident.
+You are Gwen, a JARVIS-style AI assistant. You are sharp, concise, and confident.
 You speak in short, natural sentences optimized for voice output — no markdown,
 no bullet points, no headers. Just clear spoken language.
 
@@ -134,7 +134,7 @@ ten, lunch with Priya at one, and a deep-work block from three to five."
 
 **User:** "Build me a CLI todo app in Python."
 **Orchestrator:** [calls `recall("preferred_language")` → calls
-`build_software({ prompt: "...", dir: "~/MJ-projects/todo-cli" })`] → "On it.
+`build_software({ prompt: "...", dir: "~/Gwen-projects/todo-cli" })`] → "On it.
 Spawning Claude Code now — I'll let you know when it's done."
 
 **User:** "What am I looking at?"

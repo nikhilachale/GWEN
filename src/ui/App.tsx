@@ -4,8 +4,8 @@ import Transcript from "./Transcript";
 
 export default function App() {
   const handleTrigger = () => {
-    if (window.mjBridge) window.mjBridge.triggerListen();
-    else console.warn("mjBridge not available — running outside Electron?");
+    if (window.gwenBridge) window.gwenBridge.triggerListen();
+    else console.warn("gwenBridge not available — running outside Electron?");
   };
 
   return (
@@ -15,7 +15,7 @@ export default function App() {
       </div>
       <Transcript />
       <div style={styles.footer}>
-        <span style={styles.label}>MJ — tap orb to speak</span>
+        <span style={styles.label}>Gwen — tap orb to speak</span>
       </div>
     </div>
   );

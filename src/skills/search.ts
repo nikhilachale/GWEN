@@ -39,7 +39,7 @@ export async function search(query, count = 5) {
 export async function fetchPage(url) {
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 MJ-Assistant" },
+      headers: { "User-Agent": "Mozilla/5.0 Gwen-Assistant" },
     });
     const html = await res.text();
     const dom = new JSDOM(html, { url });

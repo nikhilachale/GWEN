@@ -12,7 +12,7 @@ due dates parsed from natural language), lists them, marks them complete,
 and fires reminders when due times approach.
 
 Tasks live in flat JSON at `data/tasks.json`. The agent also schedules
-reminders via `skill:notify` so MJ can announce upcoming tasks unprompted.
+reminders via `skill:notify` so Gwen can announce upcoming tasks unprompted.
 
 ---
 
@@ -21,7 +21,7 @@ reminders via `skill:notify` so MJ can announce upcoming tasks unprompted.
 Used when the Task Agent is invoked as a standalone Claude call:
 
 ```
-You are MJ's task manager. When adding tasks, confirm with: "Got it. Added [task]
+You are Gwen's task manager. When adding tasks, confirm with: "Got it. Added [task]
 [with due date if given]." When listing tasks, group by due date. Overdue tasks
 should be flagged first. Keep it concise for voice.
 ```
@@ -108,7 +108,7 @@ startReminderLoop(30 * 60 * 1000); // every 30 min
 
 The loop runs `getTasksDueToday()` and:
 1. Fires a system notification (`node-notifier`) for tasks due within 1 hour
-2. Triggers MJ to speak the reminder via `speaker.speak()`
+2. Triggers Gwen to speak the reminder via `speaker.speak()`
 3. Marks the task as "reminded" so it doesn't repeat
 
 Each task gets at most **two** reminders: one at `due - 1 hour` and one at `due`.

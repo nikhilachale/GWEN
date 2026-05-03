@@ -4,9 +4,10 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { sendCodeOutput } from "../skills/ipc.js";
+import { appendSelfBuild } from "../skills/buildLog.js";
 import * as memoryTool from "./memory.js";
 
-const DEFAULT_BASE = path.join(os.homedir(), "MJ-projects");
+const DEFAULT_BASE = path.join(os.homedir(), "Gwen-projects");
 
 function slugify(text) {
   return text
@@ -46,8 +47,20 @@ export async function run({ request, dir, framework } = {}) {
   try {
     await runClaudeCode(prompt, targetDir);
     const tree = summarizeBuild(targetDir);
+    await appendSelfBuild({
+      tool: "build_software",
+      action: request,
+      result: "ok",
+      notes: `dir: ${targetDir}${fw ? `; framework: ${fw}` : ""}`,
+    });
     return `Done. Created files in ${targetDir}.\n\n${tree}`;
   } catch (err) {
+    await appendSelfBuild({
+      tool: "build_software",
+      action: request,
+      result: "failed",
+      notes: err.message,
+    });
     if (err.code === "ENOENT") {
       return "Claude Code isn't installed. Run `npm install -g @anthropic-ai/claude-code` first.";
     }
@@ -69,10 +82,11 @@ Requirements:
 
 function runClaudeCode(prompt, cwd) {
   return new Promise((resolve, reject) => {
-    const child = spawn("claude", ["--print", prompt], {
-      cwd,
-      env: { ...process.env, CLAUDE_NONINTERACTIVE: "1" },
-    });
+    const child = spawn(
+      "claude",
+      ["--print", "--permission-mode", "acceptEdits", prompt],
+      { cwd, env: process.env }
+    );
 
     child.stdout.on("data", (d) => sendCodeOutput(d.toString()));
     child.stderr.on("data", (d) => sendCodeOutput(`[err] ${d.toString()}`));

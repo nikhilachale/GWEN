@@ -1,0 +1,81 @@
+// src/tools/selfFix.js — let Gwen fix her own code via Claude Code CLI.
+// Spawns `claude --print` in this repo's root so the model edits Gwen's source
+// directly. Output streams to the UI via gwen:code-output.
+//
+// Safety: brain.ts is instructed to confirm with the user before invoking this.
+// All changes are made on the working tree; review with `git diff` and revert
+// with `git restore .` if the fix breaks something.
+import { spawn } from "node:child_process";
+import { sendCodeOutput } from "../skills/ipc.js";
+import { appendSelfBuild } from "../skills/buildLog.js";
+import { PROJECT_ROOT } from "../skills/projectRoot.js";
+
+export async function run({ description, files } = {}) {
+  if (!description || !description.trim()) {
+    return "Tell me what to fix.";
+  }
+
+  const prompt = buildPrompt(description, files);
+
+  try {
+    await runClaudeCode(prompt, PROJECT_ROOT);
+    await appendSelfBuild({
+      tool: "fix_self_code",
+      action: description,
+      result: "ok",
+      notes: Array.isArray(files) && files.length ? `files: ${files.join(", ")}` : undefined,
+    });
+    return `Fix applied. Review with git diff. Restart with npm run dev to load the change.`;
+  } catch (err) {
+    await appendSelfBuild({
+      tool: "fix_self_code",
+      action: description,
+      result: "failed",
+      notes: err.message,
+    });
+    if (err.code === "ENOENT") {
+      return "Claude Code isn't installed. Run npm install -g @anthropic-ai/claude-code first.";
+    }
+    return `Self-fix failed: ${err.message}`;
+  }
+}
+
+function buildPrompt(description, files) {
+  const fileHint =
+    Array.isArray(files) && files.length
+      ? `\n\nFocus on: ${files.join(", ")}`
+      : "";
+  return `You are editing the Gwen project (this repo). Read CLAUDE.md first.
+
+Fix request: ${description}${fileHint}
+
+Rules:
+- Make the smallest targeted change that fixes the issue.
+- Do not refactor unrelated code.
+- Do not add comments unless the bug requires it.
+- Do not run npm install, the dev server, or any tests.
+- Do not create new files unless strictly necessary.
+- When done, print one sentence describing what you changed.`;
+}
+
+function runClaudeCode(prompt, cwd) {
+  return new Promise((resolve, reject) => {
+    // --permission-mode acceptEdits auto-accepts file edits in non-interactive
+    // mode. Without it, Edit/Write tool calls are silently denied and claude
+    // exits 0 having made no changes.
+    const child = spawn(
+      "claude",
+      ["--print", "--permission-mode", "acceptEdits", prompt],
+      { cwd, env: process.env }
+    );
+
+    child.stdout.on("data", (d) => sendCodeOutput(d.toString()));
+    child.stderr.on("data", (d) => sendCodeOutput(`[err] ${d.toString()}`));
+
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`exit ${code}`));
+    });
+  });
+}

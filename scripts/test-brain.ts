@@ -13,7 +13,7 @@ console.log("→", input, "\n");
 
 try {
   const reply = await runBrain(input);
-  console.log("MJ:", reply);
+  console.log("Gwen:", reply);
 } catch (err) {
   console.error("✗ brain failed:", err);
   process.exit(1);
