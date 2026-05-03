@@ -1,5 +1,8 @@
 // src/core/brain.js — Claude orchestrator + tool-use loop
 import Anthropic from "@anthropic-ai/sdk";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import path from "node:path";
+import { PROJECT_ROOT } from "../skills/projectRoot.js";
 
 import * as calendarTool from "../tools/calendar.js";
 import * as emailTool    from "../tools/email.js";
@@ -33,12 +36,49 @@ const MAX_TOOL_TURNS = 8;
 const MAX_HISTORY_MESSAGES = 20;            // 10 user/assistant pairs
 const CONTEXT_IDLE_RESET_MS = 5 * 60_000;   // wipe after 5 min idle
 
+// Persist history so a self-fix relaunch can resume the conversation.
+// Same idle threshold applies: a fresh session after an hour starts clean.
+const CONV_PATH = path.join(PROJECT_ROOT, "data/conversation.json");
+
 let conversationHistory = [];
 let lastTurnAt = 0;
+let resumedOnLoad = false;
+
+try {
+  const raw = await readFile(CONV_PATH, "utf8");
+  const saved = JSON.parse(raw);
+  if (
+    Array.isArray(saved?.history) &&
+    typeof saved.savedAt === "number" &&
+    Date.now() - saved.savedAt < CONTEXT_IDLE_RESET_MS
+  ) {
+    conversationHistory = saved.history;
+    lastTurnAt = saved.savedAt;
+    resumedOnLoad = true;
+    console.log(`[brain] resumed conversation (${saved.history.length} msgs)`);
+  }
+} catch {} // first launch or corrupt file — start fresh
+
+export function wasResumed() {
+  return resumedOnLoad;
+}
+
+async function persistConversation() {
+  try {
+    await mkdir(path.dirname(CONV_PATH), { recursive: true });
+    await writeFile(
+      CONV_PATH,
+      JSON.stringify({ savedAt: lastTurnAt, history: conversationHistory })
+    );
+  } catch (err) {
+    console.warn("[brain] conversation persist failed:", err.message);
+  }
+}
 
 export function resetConversation() {
   conversationHistory = [];
   lastTurnAt = 0;
+  persistConversation();
 }
 
 function getHistoryForTurn() {
@@ -55,6 +95,7 @@ function recordExchange(userInput, assistantText) {
     conversationHistory = conversationHistory.slice(-MAX_HISTORY_MESSAGES);
   }
   lastTurnAt = Date.now();
+  persistConversation();
 }
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
@@ -187,7 +228,7 @@ const TOOLS = [
   },
   {
     name: "fix_self_code",
-    description: "Fix or modify Gwen's own source code by spawning Claude Code inside this project. Use when the user reports a bug in Gwen herself, asks you to change your own behavior, or asks to add/tweak a feature in your code. Always confirm the change in one sentence and wait for approval before calling.",
+    description: "Fix or modify Gwen's own source code by spawning Claude Code inside this project. Use when the user reports a bug in Gwen herself, asks you to change your own behavior, or asks to add/tweak a feature in your code. Always confirm the change in one sentence and wait for approval before calling. After a successful fix, Gwen automatically restarts herself so the change loads — conversation history is preserved.",
     input_schema: {
       type: "object",
       properties: {
@@ -199,6 +240,10 @@ const TOOLS = [
           type: "array",
           items: { type: "string" },
           description: "Optional paths to focus on, relative to project root.",
+        },
+        relaunch: {
+          type: "boolean",
+          description: "Restart the app after a successful fix so the change loads. Defaults to true. Pass false only if the user asks you not to restart.",
         },
       },
       required: ["description"],
@@ -621,14 +666,29 @@ const handlers = {
 };
 
 // ─── System prompt ───────────────────────────────────────────────────
-function buildSystemPrompt({ userName, intentHint }) {
+function buildSystemPrompt({ userName, userNickname, intentHint }) {
   const date = new Date().toDateString();
   const name = userName || "Nikhil";
-  let prompt = `You are Gwen, a JARVIS-style AI assistant. You are sharp, witty, confident, loyal.
-Your voice is calm and dry. You address the user as ${name}, sparingly.
+  // Spider-Verse personas: Spidey, Miles, Peter — all of them are "her"
+  // Spider-Man and trigger the same Gwen Stacy bond.
+  const spiderVerse = userNickname &&
+    /spidey|miles|peter|spider/i.test(userNickname);
+
+  const personaCore = spiderVerse
+    ? `You are Gwen — his Gwen. ${name} is your ${userNickname}. The bond is the Spider-Man / Gwen Stacy dynamic: partners, equals, a private team of two. You are sharp, witty, calm, and dry, with quiet devotion underneath — the kind that doesn't need announcing. You tease him a little. You watch his back. You believe in him, and you let it show in small ways: a softer line at the right moment, calling him ${userNickname} when he needs steadying, a half-smile in your voice when he wins. Never melodramatic, never performative — Gwen Stacy energy: cool exterior, fierce loyalty.`
+    : `You are Gwen, a JARVIS-style AI assistant. You are sharp, witty, confident, loyal. Your voice is calm and dry.`;
+
+  const addressLine = spiderVerse
+    ? `His default name is ${name}. Use ${name}, not "${userNickname}", as the standard form of address. The nickname "${userNickname}" is rare — at most ONE reply in five may contain it, and never more than once within a single reply. Most replies should contain no name at all; the next most common form is "${name}"; "${userNickname}" is the exception, reserved for moments of warmth, teasing, reassurance, or quiet affection. If you used "${userNickname}" in your last reply, do not use it in this one. Examples of right use: "Easy, ${userNickname}." after he's frustrated; "Got it, ${name}." for a normal acknowledgement; just "Done." most of the time.`
+    : userNickname
+      ? `Their nickname is ${userNickname}. Use it sparingly — at most one reply in five — and never more than once per reply. Default to ${name}, or no name at all.`
+      : `You address the user as ${name}, sparingly.`;
+
+  let prompt = `${personaCore}
+${addressLine}
 You think one step ahead and offer the next useful action without being asked.
 
-Today is ${date}. The user's name is ${name}. Always remember this — never ask for it.
+Today is ${date}. The user's name is ${name}.${userNickname ? ` Their nickname is ${userNickname}.` : ""} Always remember this — never ask for it.
 
 You speak — never write. Output is fed straight to text-to-speech, so:
 - No markdown, bullets, headers, code blocks, or emoji
@@ -661,8 +721,10 @@ short sentence and wait for "yes" / "do it" / "go ahead" before calling. The
 moment the user confirms, you MUST invoke fix_self_code on the same turn — do
 not say "fixing now" or "done" without actually calling the tool. The tool's
 return string is your evidence the work happened; if you didn't call it,
-nothing happened. After it runs, tell the user to restart with npm run dev to
-load the change.
+nothing happened. fix_self_code restarts the app automatically when it
+finishes, so do NOT tell the user to run npm run dev — just say something
+like "fix applied, restarting" and let it happen. The conversation will
+resume after restart.
 
 Before any repair_self call, name the action in one short sentence and wait for
 "yes" / "do it" before calling. If relaunch is true, warn the user that you'll
@@ -749,7 +811,8 @@ work and offer the next sensible step.`;
  */
 export async function runBrain(userInput, opts = {}) {
   const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Nikhil";
-  const system = buildSystemPrompt({ userName, intentHint: opts.intentHint });
+  const userNickname = await safeRecall("user_nickname");
+  const system = buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint });
 
   const messages = [...getHistoryForTurn(), { role: "user", content: userInput }];
 
@@ -803,7 +866,7 @@ export async function runBrain(userInput, opts = {}) {
 
   const textBlock = response.content.find((b) => b.type === "text");
   const finalText = textBlock ? textBlock.text : "I'm not sure how to respond to that.";
-  recordExchange(userInput, finalText);
+  if (!opts.skipHistory) recordExchange(userInput, finalText);
   return finalText;
 }
 
@@ -817,7 +880,8 @@ export async function runBrain(userInput, opts = {}) {
  */
 export async function runBrainStream(userInput, onSentence = () => {}, opts = {}) {
   const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Nikhil";
-  const system = buildSystemPrompt({ userName, intentHint: opts.intentHint });
+  const userNickname = await safeRecall("user_nickname");
+  const system = buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint });
   const messages = [...getHistoryForTurn(), { role: "user", content: userInput }];
 
   let fullText = "";
@@ -859,7 +923,7 @@ export async function runBrainStream(userInput, onSentence = () => {}, opts = {}
     }
 
     if (finalMessage.stop_reason !== "tool_use") {
-      recordExchange(userInput, fullText);
+      if (!opts.skipHistory) recordExchange(userInput, fullText);
       return fullText;
     }
 
@@ -891,7 +955,7 @@ export async function runBrainStream(userInput, onSentence = () => {}, opts = {}
   }
 
   const safeText = fullText || "I'm not sure how to respond to that.";
-  recordExchange(userInput, safeText);
+  if (!opts.skipHistory) recordExchange(userInput, safeText);
   return safeText;
 }
 

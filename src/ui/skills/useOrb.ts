@@ -1,11 +1,16 @@
 // src/ui/skills/useOrb.js — manages orb visual state from IPC
 import { useEffect, useState, useRef } from "react";
 
+// Locked Miles palette — print-plate logic:
+//   idle  → muted red glow on black (subtle, 80% black rule)
+//   listening → bright RED #ED1C24 (alert plate)
+//   thinking  → MAGENTA #E91E63 (processing / offset plate)
+//   speaking  → CYAN #00B4D8 (output / offset plate)
 const STATE_CONFIG = {
-  idle:      { color: "#00d4ff", pulseHz: 0.3, particles: 3000 },
-  listening: { color: "#ffffff", pulseHz: 1.5, particles: 4000 },
-  thinking:  { color: "#ff9500", pulseHz: 0.8, particles: 3500 },
-  speaking:  { color: "#00ff88", pulseHz: 1.0, particles: 5000 },
+  idle:      { color: "#8B0000", pulseHz: 0.3, particles: 3000 },
+  listening: { color: "#ED1C24", pulseHz: 1.5, particles: 4000 },
+  thinking:  { color: "#E91E63", pulseHz: 0.8, particles: 3500 },
+  speaking:  { color: "#00B4D8", pulseHz: 1.0, particles: 5000 },
 };
 
 export function useOrb() {

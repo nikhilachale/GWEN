@@ -6,17 +6,19 @@
 // All changes are made on the working tree; review with `git diff` and revert
 // with `git restore .` if the fix breaks something.
 import { spawn } from "node:child_process";
-import { sendCodeOutput } from "../skills/ipc.js";
+import { sendCodeOutput, sendSelfFix } from "../skills/ipc.js";
 import { appendSelfBuild } from "../skills/buildLog.js";
 import { PROJECT_ROOT } from "../skills/projectRoot.js";
+import { relaunchApp } from "../skills/relaunch.js";
 
-export async function run({ description, files } = {}) {
+export async function run({ description, files, relaunch = true } = {}) {
   if (!description || !description.trim()) {
     return "Tell me what to fix.";
   }
 
   const prompt = buildPrompt(description, files);
 
+  sendSelfFix(true, "rewriting myself");
   try {
     await runClaudeCode(prompt, PROJECT_ROOT);
     await appendSelfBuild({
@@ -25,7 +27,14 @@ export async function run({ description, files } = {}) {
       result: "ok",
       notes: Array.isArray(files) && files.length ? `files: ${files.join(", ")}` : undefined,
     });
-    return `Fix applied. Review with git diff. Restart with npm run dev to load the change.`;
+    if (relaunch) {
+      // Delay so the spoken reply finishes before the window dies. The
+      // detached `npm run dev` will respawn the dev pipeline; conversation
+      // history persists via data/conversation.json so we resume on boot.
+      setTimeout(() => relaunchApp(), 2500);
+      return "Fix applied. Restarting myself now.";
+    }
+    return "Fix applied. Review with git diff.";
   } catch (err) {
     await appendSelfBuild({
       tool: "fix_self_code",
@@ -37,6 +46,8 @@ export async function run({ description, files } = {}) {
       return "Claude Code isn't installed. Run npm install -g @anthropic-ai/claude-code first.";
     }
     return `Self-fix failed: ${err.message}`;
+  } finally {
+    sendSelfFix(false);
   }
 }
 

@@ -12,6 +12,7 @@ declare global {
       onTranscript: (cb: (entry: unknown) => void) => () => void;
       onAudioLevel: (cb: (level: number) => void) => () => void;
       onCodeOutput: (cb: (output: unknown) => void) => () => void;
+      onSelfFix: (cb: (state: { active: boolean; label: string }) => void) => () => void;
       triggerListen: () => void;
       getState: () => Promise<string>;
     };

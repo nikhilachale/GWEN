@@ -6,10 +6,10 @@
 import { spawn } from "node:child_process";
 import { rm } from "node:fs/promises";
 import path from "node:path";
-import { app } from "electron";
-import { sendCodeOutput } from "../skills/ipc.js";
+import { sendCodeOutput, sendSelfFix } from "../skills/ipc.js";
 import { appendSelfBuild } from "../skills/buildLog.js";
 import { PROJECT_ROOT } from "../skills/projectRoot.js";
+import { relaunchApp } from "../skills/relaunch.js";
 
 const ACTIONS = {
   rebuild_electron: {
@@ -40,6 +40,7 @@ export async function run({ action, relaunch } = {}) {
     return `Unknown repair action. Options: ${Object.keys(ACTIONS).join(", ")}.`;
   }
 
+  sendSelfFix(true, op.label);
   try {
     sendCodeOutput(`\n[repair] ${op.label}...\n`);
     await op.run();
@@ -54,10 +55,7 @@ export async function run({ action, relaunch } = {}) {
     });
 
     if (shouldRelaunch) {
-      setTimeout(() => {
-        app.relaunch();
-        app.exit(0);
-      }, 1500);
+      setTimeout(() => relaunchApp(), 1500);
       return `${capitalize(op.label)} complete. Relaunching now.`;
     }
     return `${capitalize(op.label)} complete.`;
@@ -69,6 +67,10 @@ export async function run({ action, relaunch } = {}) {
       notes: err.message,
     });
     return `Repair failed: ${err.message}`;
+  } finally {
+    // Keep banner visible briefly past relaunch trigger so the user sees
+    // the result before the window restarts.
+    setTimeout(() => sendSelfFix(false), 1200);
   }
 }
 

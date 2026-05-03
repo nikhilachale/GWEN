@@ -26,3 +26,9 @@ export function sendAudioLevel(level) {
 export function sendCodeOutput(chunk) {
   safeSend("gwen:code-output", chunk);
 }
+
+// Lifecycle signal for the self-fix UI overlay.
+// active=true → show the "rewriting myself" banner; false → hide.
+export function sendSelfFix(active, label) {
+  safeSend("gwen:self-fix", { active: !!active, label: label || "" });
+}

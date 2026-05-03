@@ -1,29 +1,76 @@
+/*
+ * Miles Morales palette
+ *   --black:   #111111  (80% — dominant background)
+ *   --red:     #ED1C24  (primary accent)
+ *   --cyan:    #00B4D8  (chromatic-aberration offset)
+ *   --magenta: #E91E63  (chromatic-aberration offset)
+ *
+ * Use `text-shadow: -1.5px 0 0 var(--magenta), 1.5px 0 0 var(--cyan);`
+ * for the printing-misalignment look.
+ */
+:root {
+  --black:   #111111;
+  --red:     #ED1C24;
+  --cyan:    #00B4D8;
+  --magenta: #E91E63;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body, #root {
   height: 100%;
-  background: #000;
-  color: #e0f4ff;
-  font-family: 'Rajdhani', 'Exo 2', system-ui, sans-serif;
+  background: var(--black);
+  color: #f5f5f5;
+  font-family: 'JetBrains Mono', 'Space Mono', 'Rajdhani', 'Exo 2', ui-monospace, 'SF Mono', monospace;
   overflow: hidden;
   user-select: none;
 }
 
+/*
+ * 80% black, with a very subtle red grid + faint cyan scanline so the
+ * background reads as "comic-book newsprint" without competing with the
+ * orb. Both effects are dialed low — the eye should stop on the orb.
+ */
+body {
+  background-color: var(--black);
+  background-image:
+    radial-gradient(ellipse at center, rgba(237, 28, 36, 0.08) 0%, rgba(17, 17, 17, 1) 75%),
+    linear-gradient(rgba(237, 28, 36, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(237, 28, 36, 0.04) 1px, transparent 1px),
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 180, 216, 0.018) 0px,
+      rgba(0, 180, 216, 0.018) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  background-size: 100% 100%, 40px 40px, 40px 40px, 100% 3px;
+}
+
 button {
   font-family: inherit;
-  background: transparent;
-  border: 1px solid rgba(0, 212, 255, 0.4);
-  color: #00d4ff;
+  background: rgba(237, 28, 36, 0.08);
+  border: 1px solid rgba(237, 28, 36, 0.55);
+  color: var(--red);
   padding: 8px 16px;
-  border-radius: 4px;
+  border-radius: 2px;
   cursor: pointer;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
-  font-size: 12px;
+  font-size: 11px;
   transition: all 0.2s ease;
+  box-shadow: 0 0 8px rgba(237, 28, 36, 0.3), inset 0 0 8px rgba(237, 28, 36, 0.06);
+  text-shadow: -1px 0 0 var(--magenta), 1px 0 0 var(--cyan);
 }
 
 button:hover {
-  background: rgba(0, 212, 255, 0.1);
-  border-color: rgba(0, 212, 255, 0.8);
+  background: rgba(237, 28, 36, 0.16);
+  border-color: var(--red);
+  box-shadow: 0 0 16px rgba(237, 28, 36, 0.6), inset 0 0 12px rgba(237, 28, 36, 0.12);
+}
+
+button:focus-visible {
+  outline: 1px solid var(--red);
+  outline-offset: 2px;
+  box-shadow: 0 0 18px rgba(237, 28, 36, 0.75);
 }

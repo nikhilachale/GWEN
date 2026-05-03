@@ -147,40 +147,58 @@ app.whenReady().then(async () => {
   // Startup briefing — Gwen composes it herself using her tools.
   setState("thinking");
 
-  // Recall the user's city so the briefing weather is for the right place.
-  // wttr.in's IP geolocation is unreliable from datacenter/VPN ranges.
+  // Recall the user's name and city so the greeting is personal and the
+  // weather is for the right place (wttr.in's IP geolocation is unreliable).
+  let storedName = null;
   let storedCity = null;
   try {
     const memoryMod = await import("../src/tools/memory.js");
-    const recalled = await memoryMod.recall({ key: "user_city" });
-    if (typeof recalled === "string" && !recalled.startsWith("I don't")) {
-      storedCity = recalled;
-    }
+    const [n, c] = await Promise.all([
+      memoryMod.recall({ key: "user_name" }),
+      memoryMod.recall({ key: "user_city" }),
+    ]);
+    if (typeof n === "string" && !n.startsWith("I don't")) storedName = n;
+    if (typeof c === "string" && !c.startsWith("I don't")) storedCity = c;
   } catch (err) {
-    console.warn("[gwen] city recall failed:", err.message);
+    console.warn("[gwen] memory recall failed:", err.message);
   }
 
-  const cityLine = storedCity
-    ? `The user's city is ${storedCity} — call get_weather with location="${storedCity}". `
-    : `You don't know the user's city yet — skip weather, and at the end ask "where are you based?" so you can remember it for next time. `;
+  const name = storedName || process.env.GWEN_USER_NAME || "Nikhil";
+  const hour = new Date().getHours();
+  const partOfDay =
+    hour < 5 ? "late night" : hour < 12 ? "morning" : hour < 17 ? "afternoon" : hour < 21 ? "evening" : "night";
 
-  const briefingPrompt =
-    "Startup briefing. Greet Nikhil by name. Tell him today's date in a natural way. " +
-    cityLine +
-    "Then check his calendar for today, his tasks, and his Reminders. " +
-    "If he has anything pending, name them concisely and ask when he wants to do " +
-    "what. If he has nothing, ask what he wants to do today. " +
-    "Keep it under five short sentences. No preamble — go straight into the greeting.";
+  const cityLine = storedCity
+    ? `Their city is ${storedCity} — call get_weather with location="${storedCity}" and weave the conditions in casually (one short clause, not a forecast).`
+    : `You don't know their city yet — skip weather, and at the end casually ask where they're based so you can remember it for next time.`;
+
+  // If the previous session was resumed (a self-fix or quick restart within
+  // the idle window), give a brief "back online" greeting instead of the full
+  // briefing — the user is mid-conversation and doesn't need a fresh rundown.
+  const briefingPrompt = brain.wasResumed()
+    ? `You just came back from a self-fix restart. The user is ${name}. ` +
+      `Greet them with a single short sentence acknowledging you're back — dry, ` +
+      `confident, like nothing dramatic happened. No preamble, no briefing, no ` +
+      `tools. One sentence only.`
+    : `Welcome ${name} back. It is ${partOfDay} where they are. ` +
+      `Open with a warm, familiar greeting — the kind a long-time assistant who knows them well would use. ` +
+      `Use their name once, naturally, not formally. Vary the opener; don't say "Good ${partOfDay}" or anything stock. ` +
+      `Sound like you've been with them a while — dry, witty, calm, but glad they're back. ` +
+      `${cityLine} ` +
+      `Then check their calendar for today, their tasks, and their Reminders. ` +
+      `If something is pending, mention it the way a friend would — not a status readout — and ask what they want to tackle first. ` +
+      `If nothing is pending, ask what they feel like doing today. ` +
+      `Keep it to three or four short sentences. No "Here is your briefing" preambles, no list formatting — just speak.`;
 
   let briefing;
   try {
-    briefing = await brain.runBrain(briefingPrompt);
+    // skipHistory: the synthetic startup turn shouldn't be recorded — but if
+    // we just resumed, we still want the existing on-disk history preserved.
+    briefing = await brain.runBrain(briefingPrompt, { skipHistory: true });
   } catch (err) {
     console.warn("[gwen] briefing failed:", err.message);
-    briefing = "Hi Nikhil. Gwen online.";
+    briefing = `Back online, ${name}.`;
   }
-  // Synthetic startup turn shouldn't pollute conversation history.
-  brain.resetConversation();
 
   setState("speaking");
   ipc.sendTranscript("assistant", briefing);

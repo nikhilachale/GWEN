@@ -1,6 +1,7 @@
 import React from "react";
 import Orb from "./Orb";
 import Transcript from "./Transcript";
+import SelfFixOverlay from "./SelfFixOverlay";
 
 export default function App() {
   const handleTrigger = () => {
@@ -10,6 +11,7 @@ export default function App() {
 
   return (
     <div style={styles.root}>
+      <SelfFixOverlay />
       <div style={styles.orbWrap} onClick={handleTrigger}>
         <Orb />
       </div>
@@ -25,7 +27,7 @@ const styles = {
   root: {
     width: "100vw",
     height: "100vh",
-    background: "#000",
+    background: "transparent",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
@@ -41,10 +43,12 @@ const styles = {
   footer: {
     position: "absolute",
     bottom: 16,
-    fontSize: 11,
-    letterSpacing: "0.2em",
-    color: "rgba(0, 212, 255, 0.5)",
+    fontSize: 10,
+    letterSpacing: "0.4em",
+    color: "#ED1C24",
     textTransform: "uppercase",
+    // Print-misalignment chromatic offset
+    textShadow: "-1.5px 0 0 #E91E63, 1.5px 0 0 #00B4D8",
   },
   label: {},
 };
