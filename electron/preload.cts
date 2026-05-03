@@ -1,4 +1,4 @@
-// electron/preload.cjs — contextBridge for renderer
+// electron/preload.cts — contextBridge for renderer
 // CJS for Electron preload compatibility.
 const { contextBridge, ipcRenderer } = require("electron");
 

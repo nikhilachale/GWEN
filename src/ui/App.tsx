@@ -1,6 +1,6 @@
 import React from "react";
-import Orb from "./Orb.jsx";
-import Transcript from "./Transcript.jsx";
+import Orb from "./Orb";
+import Transcript from "./Transcript";
 
 export default function App() {
   const handleTrigger = () => {

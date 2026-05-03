@@ -1,0 +1,10 @@
+declare module "active-win";
+declare module "better-sqlite3";
+declare module "node-notifier";
+declare module "node-record-lpcm16";
+declare module "nodejs-whisper";
+declare module "play-sound";
+declare module "screenshot-desktop";
+declare module "shelljs";
+declare module "openai";
+declare module "elevenlabs";

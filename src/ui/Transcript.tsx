@@ -1,4 +1,4 @@
-// src/ui/Transcript.jsx — live conversation feed
+// src/ui/Transcript.tsx — live conversation feed
 import React, { useEffect, useState, useRef } from "react";
 
 const MAX_LINES = 8;

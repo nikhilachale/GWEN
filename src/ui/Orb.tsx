@@ -1,4 +1,4 @@
-// src/ui/Orb.jsx — Three.js audio-reactive particle orb
+// src/ui/Orb.tsx — Three.js audio-reactive particle orb
 import React, { useRef, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
