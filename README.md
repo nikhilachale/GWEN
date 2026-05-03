@@ -1,4 +1,4 @@
-# MJ — JARVIS-Style AI Assistant
+# Gwen personal  AI Assistant
 
 Voice-first, always-on AI desktop assistant. Claude does the thinking;
 ElevenLabs does the talking; macOS does the work.
