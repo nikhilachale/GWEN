@@ -9,6 +9,14 @@ const TMP_PATH = "/tmp/mj_input.wav";
 const SILENCE_THRESHOLD_MS = 1200;
 const SAMPLE_RATE = 16000;
 const MODEL_NAME = process.env.MJ_WHISPER_MODEL || "base.en";
+const GROQ_MODEL = process.env.MJ_GROQ_STT_MODEL || "whisper-large-v3-turbo";
+
+// Vocabulary biasing — names, apps, and terms MJ should recognize correctly.
+// Override with MJ_STT_PROMPT in .env.
+const STT_PROMPT =
+  process.env.MJ_STT_PROMPT ||
+  "Gwen, Nikhil, Achale, WhatsApp, iMessage, FaceTime, " +
+  "Spotify, Tavily, Anthropic, Claude, IPL, Mumbai, Bangalore, Chennai.";
 
 // nodejs-whisper uses shelljs, which needs a real Node binary.
 // Inside Electron, process.execPath is the Electron binary, so shelljs fails.
@@ -90,40 +98,75 @@ export async function transcribeAudio(maxMs = 8000) {
 }
 
 /**
- * Transcribe an existing audio file. Local first, cloud fallback.
+ * Transcribe an existing audio file.
+ * Provider chain: Groq (Whisper-large-v3-turbo) > OpenAI Whisper > local nodejs-whisper.
  */
 export async function transcribeFile(filePath) {
-  if (!process.env.OPENAI_KEY) {
+  if (process.env.GROQ_KEY) {
     try {
-      const nodewhisper = await getLocalWhisper();
-      const out = await nodewhisper(filePath, {
-        modelName: MODEL_NAME,
-        autoDownloadModelName: MODEL_NAME,
-        removeWavFileAfterTranscription: false,
-        whisperOptions: {
-          outputInText: true,
-          language: "en",
-          wordTimestamps: false,
-        },
-      });
-      return cleanWhisperOutput(out);
+      const text = await transcribeGroq(filePath);
+      if (text) return text;
     } catch (err) {
-      console.error("[stt] local whisper failed:", err.message);
-      return "";
+      console.warn("[stt] Groq failed, falling back:", err.message);
+    }
+  }
+
+  if (process.env.OPENAI_KEY) {
+    try {
+      const openai = await getOpenAI();
+      const result = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(filePath),
+        model: "whisper-1",
+        language: "en",
+        temperature: 0,
+        prompt: STT_PROMPT,
+      });
+      return (result.text || "").trim();
+    } catch (err) {
+      console.error("[stt] cloud whisper failed:", err.message);
     }
   }
 
   try {
-    const openai = await getOpenAI();
-    const result = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(filePath),
-      model: "whisper-1",
+    const nodewhisper = await getLocalWhisper();
+    const out = await nodewhisper(filePath, {
+      modelName: MODEL_NAME,
+      autoDownloadModelName: MODEL_NAME,
+      removeWavFileAfterTranscription: false,
+      whisperOptions: {
+        outputInText: true,
+        language: "en",
+        wordTimestamps: false,
+      },
     });
-    return (result.text || "").trim();
+    return cleanWhisperOutput(out);
   } catch (err) {
-    console.error("[stt] cloud whisper failed:", err.message);
+    console.error("[stt] local whisper failed:", err.message);
     return "";
   }
+}
+
+async function transcribeGroq(filePath) {
+  const form = new FormData();
+  const buf = fs.readFileSync(filePath);
+  form.append("file", new Blob([buf], { type: "audio/wav" }), "audio.wav");
+  form.append("model", GROQ_MODEL);
+  form.append("language", "en");
+  form.append("temperature", "0");
+  form.append("prompt", STT_PROMPT);
+  form.append("response_format", "json");
+
+  const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.GROQ_KEY}` },
+    body: form,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Groq ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  return (data.text || "").trim();
 }
 
 function cleanWhisperOutput(raw) {

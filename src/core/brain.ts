@@ -25,6 +25,36 @@ import * as screenCore   from "./screen.js";
 const MODEL = process.env.MJ_BRAIN_MODEL || "claude-sonnet-4-6";
 const MAX_TOOL_TURNS = 8;
 
+// Conversation context: keep the last N user/assistant text exchanges so MJ
+// can answer follow-ups like "and tomorrow?" or "what about the second one?".
+// Tool calls/results are dropped from history to keep token cost flat.
+const MAX_HISTORY_MESSAGES = 20;            // 10 user/assistant pairs
+const CONTEXT_IDLE_RESET_MS = 5 * 60_000;   // wipe after 5 min idle
+
+let conversationHistory = [];
+let lastTurnAt = 0;
+
+export function resetConversation() {
+  conversationHistory = [];
+  lastTurnAt = 0;
+}
+
+function getHistoryForTurn() {
+  if (lastTurnAt && Date.now() - lastTurnAt > CONTEXT_IDLE_RESET_MS) {
+    conversationHistory = [];
+  }
+  return conversationHistory;
+}
+
+function recordExchange(userInput, assistantText) {
+  conversationHistory.push({ role: "user", content: userInput });
+  conversationHistory.push({ role: "assistant", content: assistantText });
+  if (conversationHistory.length > MAX_HISTORY_MESSAGES) {
+    conversationHistory = conversationHistory.slice(-MAX_HISTORY_MESSAGES);
+  }
+  lastTurnAt = Date.now();
+}
+
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
 
 // ─── Tool definitions ────────────────────────────────────────────────
@@ -654,7 +684,7 @@ export async function runBrain(userInput, opts = {}) {
   const userName = await safeRecall("user_name");
   const system = buildSystemPrompt({ userName, intentHint: opts.intentHint });
 
-  const messages = [{ role: "user", content: userInput }];
+  const messages = [...getHistoryForTurn(), { role: "user", content: userInput }];
 
   let response = await client.messages.create({
     model: MODEL,
@@ -705,7 +735,9 @@ export async function runBrain(userInput, opts = {}) {
   }
 
   const textBlock = response.content.find((b) => b.type === "text");
-  return textBlock ? textBlock.text : "I'm not sure how to respond to that.";
+  const finalText = textBlock ? textBlock.text : "I'm not sure how to respond to that.";
+  recordExchange(userInput, finalText);
+  return finalText;
 }
 
 /**
@@ -719,7 +751,7 @@ export async function runBrain(userInput, opts = {}) {
 export async function runBrainStream(userInput, onSentence = () => {}, opts = {}) {
   const userName = await safeRecall("user_name");
   const system = buildSystemPrompt({ userName, intentHint: opts.intentHint });
-  const messages = [{ role: "user", content: userInput }];
+  const messages = [...getHistoryForTurn(), { role: "user", content: userInput }];
 
   let fullText = "";
   let turn = 0;
@@ -759,7 +791,10 @@ export async function runBrainStream(userInput, onSentence = () => {}, opts = {}
       buffer = "";
     }
 
-    if (finalMessage.stop_reason !== "tool_use") return fullText;
+    if (finalMessage.stop_reason !== "tool_use") {
+      recordExchange(userInput, fullText);
+      return fullText;
+    }
 
     const toolUses = finalMessage.content.filter((b) => b.type === "tool_use");
     const toolResults = await Promise.all(
@@ -788,7 +823,9 @@ export async function runBrainStream(userInput, onSentence = () => {}, opts = {}
     turn++;
   }
 
-  return fullText || "I'm not sure how to respond to that.";
+  const safeText = fullText || "I'm not sure how to respond to that.";
+  recordExchange(userInput, safeText);
+  return safeText;
 }
 
 function splitSentences(buffer) {

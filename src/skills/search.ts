@@ -59,19 +59,26 @@ async function searchTavily(query, count) {
       api_key: process.env.TAVILY_KEY,
       query,
       max_results: Math.min(count, 10),
-      include_answer: false,
-      search_depth: "basic",
+      include_answer: "advanced",
+      search_depth: "advanced",
     }),
   });
   if (!res.ok) throw new Error(`Tavily ${res.status}`);
   const data = await res.json();
-  return (data.results || []).map((r) => ({
+  const results = (data.results || []).map((r) => ({
     title: r.title,
     url: r.url,
     snippet: (r.content || "").slice(0, 300),
     published: r.published_date || null,
     score: r.score || 0,
   }));
+  // Surface Tavily's synthesized answer first so the LLM doesn't have to
+  // re-derive it from raw snippets — major quality + latency win on
+  // current-events queries.
+  if (data.answer) {
+    return [{ title: "Tavily summary", url: null, snippet: data.answer, isAnswer: true }, ...results];
+  }
+  return results;
 }
 
 async function searchBrave(query, count) {
