@@ -11,6 +11,15 @@ import * as dayPlanTool  from "../tools/dayplan.js";
 import * as codegenTool  from "../tools/codegen.js";
 import * as macTool      from "../tools/macControl.js";
 import * as filesTool    from "../tools/files.js";
+import * as systemTool   from "../tools/system.js";
+import * as shortcutsTool from "../tools/shortcuts.js";
+import * as musicTool    from "../tools/music.js";
+import * as remindersTool from "../tools/reminders.js";
+import * as appleNotesTool from "../tools/appleNotes.js";
+import * as mapsTool     from "../tools/maps.js";
+import * as callsTool    from "../tools/calls.js";
+import * as timersTool   from "../tools/timers.js";
+import * as weatherTool  from "../tools/weather.js";
 import * as screenCore   from "./screen.js";
 
 const MODEL = process.env.MJ_BRAIN_MODEL || "claude-sonnet-4-6";
@@ -228,6 +237,266 @@ const TOOLS = [
       required: ["path"],
     },
   },
+  {
+    name: "set_volume",
+    description: "Control system output volume. Use level (0-100) for absolute, or action: 'up'/'down'/'mute'/'unmute'/'toggle_mute'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        level:  { type: "number", description: "Absolute level 0–100." },
+        action: { type: "string", enum: ["up", "down", "mute", "unmute", "toggle_mute"] },
+      },
+    },
+  },
+  {
+    name: "get_volume",
+    description: "Read current system output volume and mute state.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "set_brightness",
+    description: "Step display brightness up or down. For an exact level, use run_shortcut with a Brightness shortcut.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["up", "down"] },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "toggle_wifi",
+    description: "Turn Wi-Fi on, off, or toggle. Omit 'on' to toggle.",
+    input_schema: {
+      type: "object",
+      properties: { on: { type: "boolean" } },
+    },
+  },
+  {
+    name: "toggle_bluetooth",
+    description: "Turn Bluetooth on, off, or toggle. Requires the blueutil CLI.",
+    input_schema: {
+      type: "object",
+      properties: { on: { type: "boolean" } },
+    },
+  },
+  {
+    name: "toggle_dark_mode",
+    description: "Switch macOS appearance. Omit 'on' to toggle.",
+    input_schema: {
+      type: "object",
+      properties: { on: { type: "boolean" } },
+    },
+  },
+  {
+    name: "lock_screen",
+    description: "Lock the Mac screen.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "sleep_mac",
+    description: "Put the Mac to sleep.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "get_battery",
+    description: "Get battery percentage and charging state.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "run_shortcut",
+    description: "Run a macOS Shortcut by name. Use this for HomeKit, Focus modes, custom automations, and anything in the user's Shortcuts app. Optionally pass text input.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name:  { type: "string", description: "Exact shortcut name." },
+        input: { type: "string", description: "Optional text input passed to the shortcut." },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "list_shortcuts",
+    description: "List installed macOS Shortcuts. Optionally filter by substring.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Optional name filter." },
+      },
+    },
+  },
+  {
+    name: "music_control",
+    description: "Play, pause, skip, go back, or stop in Apple Music or Spotify.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["play", "pause", "playpause", "next", "previous", "stop"] },
+        app:    { type: "string", enum: ["music", "spotify"], description: "Default music." },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "music_play",
+    description: "Search the Apple Music library for a track/album/artist and start playing it.",
+    input_schema: {
+      type: "object",
+      properties: { query: { type: "string" } },
+      required: ["query"],
+    },
+  },
+  {
+    name: "music_now_playing",
+    description: "What is currently playing in Apple Music or Spotify.",
+    input_schema: {
+      type: "object",
+      properties: { app: { type: "string", enum: ["music", "spotify"] } },
+    },
+  },
+  {
+    name: "add_reminder",
+    description: "Add a reminder to the macOS Reminders.app (iCloud-synced). Distinct from add_task which uses MJ's local store. Use this when the user says 'remind me'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        text: { type: "string" },
+        due:  { type: "string", description: "Natural language date/time, e.g. 'tomorrow 9am'." },
+        list: { type: "string", description: "Reminders list name. Default 'Reminders'." },
+      },
+      required: ["text"],
+    },
+  },
+  {
+    name: "list_reminders",
+    description: "List reminders from a Reminders.app list.",
+    input_schema: {
+      type: "object",
+      properties: {
+        list:             { type: "string" },
+        includeCompleted: { type: "boolean" },
+        limit:            { type: "number" },
+      },
+    },
+  },
+  {
+    name: "create_apple_note",
+    description: "Create a note in macOS Notes.app (iCloud-synced). Distinct from save_note which writes a local markdown file.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title:  { type: "string" },
+        body:   { type: "string" },
+        folder: { type: "string", description: "Optional folder name." },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "search_apple_notes",
+    description: "Search Notes.app titles and bodies.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        limit: { type: "number" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "get_directions",
+    description: "Open Apple Maps with directions to a destination.",
+    input_schema: {
+      type: "object",
+      properties: {
+        to:   { type: "string" },
+        from: { type: "string", description: "Optional starting point. Defaults to current location." },
+        mode: { type: "string", enum: ["driving", "walking", "transit"] },
+      },
+      required: ["to"],
+    },
+  },
+  {
+    name: "search_maps",
+    description: "Search Apple Maps for a place.",
+    input_schema: {
+      type: "object",
+      properties: { query: { type: "string" } },
+      required: ["query"],
+    },
+  },
+  {
+    name: "facetime",
+    description: "Start a FaceTime video or audio call. Confirm with the user first.",
+    input_schema: {
+      type: "object",
+      properties: {
+        contact: { type: "string", description: "Phone number, email, or Apple ID." },
+        audio:   { type: "boolean", description: "Audio-only. Default false." },
+      },
+      required: ["contact"],
+    },
+  },
+  {
+    name: "call_phone",
+    description: "Place a phone call via iPhone Continuity. Requires a paired iPhone with Calls on Other Devices enabled. Confirm with the user first.",
+    input_schema: {
+      type: "object",
+      properties: {
+        number: { type: "string", description: "Phone number, ideally in E.164 format (+15551234567)." },
+      },
+      required: ["number"],
+    },
+  },
+  {
+    name: "set_timer",
+    description: "Start a countdown timer. MJ will play a notification when it fires.",
+    input_schema: {
+      type: "object",
+      properties: {
+        minutes: { type: "number" },
+        seconds: { type: "number" },
+        label:   { type: "string" },
+      },
+    },
+  },
+  {
+    name: "set_alarm",
+    description: "Set an alarm for an absolute time (natural language: 'tomorrow 7am', 'in 90 minutes').",
+    input_schema: {
+      type: "object",
+      properties: {
+        time:  { type: "string" },
+        label: { type: "string" },
+      },
+      required: ["time"],
+    },
+  },
+  {
+    name: "list_timers",
+    description: "List active timers and alarms.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "cancel_timer",
+    description: "Cancel a timer or alarm by id, or all if id is omitted.",
+    input_schema: {
+      type: "object",
+      properties: { id: { type: "number" } },
+    },
+  },
+  {
+    name: "get_weather",
+    description: "Get current weather and a short forecast. Defaults to caller's IP location if no place given.",
+    input_schema: {
+      type: "object",
+      properties: {
+        location: { type: "string", description: "City, airport code, or 'lat,lon'." },
+        days:     { type: "number", description: "Forecast days, 1–3. Default 1." },
+      },
+    },
+  },
 ];
 
 // ─── Handler map ─────────────────────────────────────────────────────
@@ -250,6 +519,33 @@ const handlers = {
   send_whatsapp:      (i) => macTool.sendWhatsApp(i),
   list_files:         (i) => filesTool.listFiles(i),
   open_path:          (i) => filesTool.openPath(i),
+  set_volume:         (i) => systemTool.setVolume(i),
+  get_volume:         ()  => systemTool.getVolume(),
+  set_brightness:     (i) => systemTool.setBrightness(i),
+  toggle_wifi:        (i) => systemTool.toggleWifi(i),
+  toggle_bluetooth:   (i) => systemTool.toggleBluetooth(i),
+  toggle_dark_mode:   (i) => systemTool.toggleDarkMode(i),
+  lock_screen:        ()  => systemTool.lockScreen(),
+  sleep_mac:          ()  => systemTool.sleepMac(),
+  get_battery:        ()  => systemTool.getBattery(),
+  run_shortcut:       (i) => shortcutsTool.runShortcut(i),
+  list_shortcuts:     (i) => shortcutsTool.listShortcuts(i),
+  music_control:      (i) => musicTool.control(i),
+  music_play:         (i) => musicTool.play(i),
+  music_now_playing:  (i) => musicTool.nowPlaying(i),
+  add_reminder:       (i) => remindersTool.add(i),
+  list_reminders:     (i) => remindersTool.list(i),
+  create_apple_note:  (i) => appleNotesTool.create(i),
+  search_apple_notes: (i) => appleNotesTool.search(i),
+  get_directions:     (i) => mapsTool.directions(i),
+  search_maps:        (i) => mapsTool.search(i),
+  facetime:           (i) => callsTool.facetime(i),
+  call_phone:         (i) => callsTool.phone(i),
+  set_timer:          (i) => timersTool.setTimer(i),
+  set_alarm:          (i) => timersTool.setAlarm(i),
+  list_timers:        ()  => timersTool.listTimers(),
+  cancel_timer:       (i) => timersTool.cancelTimer(i),
+  get_weather:        (i) => weatherTool.getWeather(i),
 };
 
 // ─── System prompt ───────────────────────────────────────────────────
@@ -299,6 +595,34 @@ Tool routing:
 - "open / show me / reveal" a folder or file → open_path
 - iMessage → send_imessage (confirm first)
 - WhatsApp → send_whatsapp (confirm first)
+- volume / mute / louder / quieter → set_volume (or get_volume to read)
+- brightness up/down → set_brightness
+- Wi-Fi on/off/toggle → toggle_wifi
+- Bluetooth on/off/toggle → toggle_bluetooth
+- dark mode / light mode → toggle_dark_mode
+- "lock the Mac" / "lock screen" → lock_screen
+- "go to sleep" / "sleep the Mac" → sleep_mac
+- battery level / charging status → get_battery
+- HomeKit, Focus modes, "turn on Do Not Disturb", or anything the user has built
+  in the Shortcuts app → run_shortcut (use list_shortcuts first if unsure of name)
+- "play / pause / skip / next song" → music_control
+- "play [song/artist/album]" → music_play
+- "what's playing" → music_now_playing
+- "remind me to..." → add_reminder (Reminders.app, iCloud-synced).
+  Use add_task only if the user explicitly says "task" or "to-do".
+- "show my reminders" → list_reminders
+- "make a note in Notes" / "save to Apple Notes" → create_apple_note.
+  Plain "note this down" → save_note (local markdown).
+- "directions to X" / "navigate to X" → get_directions
+- "find X on the map" / "where is X" → search_maps
+- "FaceTime [contact]" → facetime (confirm first)
+- "call [number/contact]" → call_phone (confirm first; needs paired iPhone)
+- "set a timer for N minutes" → set_timer
+- "wake me at..." / "alarm for..." → set_alarm
+- "cancel the timer" / "stop alarms" → cancel_timer
+- weather, forecast, "how hot is it" → get_weather
+- translation, definitions, unit conversions, simple math → answer directly,
+  no tool needed
 - current events, facts you're unsure of → search_web
 - morning briefing → get_day_plan
 
