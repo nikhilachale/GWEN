@@ -1,0 +1,69 @@
+{
+  "name": "mj",
+  "version": "0.1.0",
+  "description": "JARVIS-style voice-first AI assistant",
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:vite\" \"npm:dev:electron\"",
+    "dev:vite": "vite",
+    "dev:electron": "wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .",
+    "build": "vite build",
+    "dist": "npm run build && electron-builder",
+    "setup-oauth": "node scripts/setup-google-oauth.js",
+    "test:tool": "node scripts/test-tool.js",
+    "test:brain": "node scripts/test-brain.js",
+    "test:voice": "node scripts/test-voice.js",
+    "test:tts": "node scripts/test-tts.js",
+    "rebuild:node": "npm rebuild better-sqlite3",
+    "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
+    "postinstall": "electron-rebuild -f -w better-sqlite3 || echo 'electron-rebuild skipped'"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.1",
+    "@mozilla/readability": "^0.6.0",
+    "@react-three/fiber": "^8.17.10",
+    "active-win": "^7.7.2",
+    "better-sqlite3": "^11.3.0",
+    "chrono-node": "^2.7.7",
+    "dotenv": "^16.4.5",
+    "googleapis": "^171.4.0",
+    "jsdom": "^25.0.1",
+    "lucide-react": "^0.460.0",
+    "node-cron": "^4.2.1",
+    "node-fetch": "^3.3.2",
+    "node-notifier": "^10.0.1",
+    "node-record-lpcm16": "^1.0.1",
+    "nodejs-whisper": "^0.2.9",
+    "open": "^10.1.0",
+    "play-sound": "^1.1.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "screenshot-desktop": "^1.15.1",
+    "sharp": "^0.33.5",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^0.0.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^41.5.0",
+    "electron-builder": "^26.8.1",
+    "vite": "^8.0.10",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.mj.assistant",
+    "productName": "MJ",
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    }
+  }
+}

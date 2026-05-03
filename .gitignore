@@ -1,0 +1,20 @@
+node_modules/
+dist/
+release/
+.env
+.env.local
+.DS_Store
+*.log
+# MJ-specific
+data/google-token.json
+data/.mj-memory.db
+data/.mj-memory.db-journal
+data/.mj-memory.db-wal
+data/.mj-memory.db-shm
+data/notes/*.md
+data/tasks.json
+
+# Editor
+.vscode/
+.idea/
+*.swp
