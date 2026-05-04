@@ -20,9 +20,14 @@ export async function run({ days = 1, query } = {}) {
     if (filtered.length === 0) return "Your calendar is clear.";
     return filtered;
   } catch (err) {
-    console.error("[calendar] fetch failed:", err.message);
-    if (/not authorized|access|permission/i.test(err.message)) {
-      return "I need Calendar access. Grant it in System Settings → Privacy & Security → Calendars.";
+    // Node's `exec` puts "Command failed: <cmd>" in err.message and the
+    // actual osascript output in err.stderr — log both so TCC/permission
+    // errors are visible.
+    const stderr = (err.stderr || "").toString();
+    console.error("[calendar] fetch failed:", err.message, stderr ? `\nstderr: ${stderr}` : "");
+    const haystack = `${err.message} ${stderr}`;
+    if (/not authorized|-1743|access|permission|user canceled/i.test(haystack)) {
+      return "I need Calendar access. Grant it in System Settings → Privacy & Security → Automation, then enable Calendar for this app.";
     }
     return "I can't reach Calendar right now.";
   }

@@ -51,3 +51,28 @@ Format per entry:
 **Action:** Update the orb component so that: 1) A spider silhouette sits at the center, 2) Radiating waves are fluid waveform-style (sinusoidal/organic, not solid circles — like sound waves or water ripples distorted into wave shapes), 3) All colors follow the app's blue theme — no hardcoded red. The spider and waveform rings should all use the primary blue accent color with varying opacity for depth and glow.
 **Result:** ok
 
+## 2026-05-04 06:32 — fix_self_code
+**Action:** Update the get_calendar tool to read events from macOS Calendar app using AppleScript or the ical/EventKit bridge, instead of Google Calendar API. This should fetch upcoming events from all locally synced macOS Calendar accounts.
+**Result:** ok
+
+## 2026-05-04 08:44 — fix_self_code
+**Action:** Add a scroll_mouse tool that can scroll up or down on the screen by a given amount, using macOS accessibility or AppleScript/CGEvent so Gwen can scroll the currently focused window programmatically.
+**Result:** ok
+
+## 2026-05-04 09:05 — fix_self_code
+**Action:** Remove the automatic DevTools opening on startup so the developer tools panel no longer appears when the app launches.
+**Result:** ok
+
+## 2026-05-04 09:17 — fix_self_code
+**Action:** Change the listening state animation color to make it clearly distinct from the thinking state. Find where the listening and thinking state colors/glows are defined (likely in a CSS or component file) and update the listening state to use a noticeably different color — for example a vivid cyan or blue glow instead of whatever color thinking uses, so the two states are immediately distinguishable at a glance.
+**Result:** ok
+
+## 2026-05-04 09:22 — fix_self_code
+**Action:** Replace the listening state animation with a ripple effect combined with bouncing dots. The listening state should show an outward ripple ring animation along with 3 bouncing dots, making it clearly distinct from the idle and thinking states.
+**Result:** ok
+
+## 2026-05-04 09:24 — fix_self_code
+**Action:** Replace the listening state animation with a combination of ripple effect and bouncing dots. The listening state should show expanding ripple rings radiating outward along with bouncing dots, making it clearly distinct from the idle and thinking states.
+**Result:** ok
+**Notes:** files: src/components/GwenOrb.tsx, src/components/GwenOrb.css, src/components/Orb.tsx, src/components/Orb.css
+

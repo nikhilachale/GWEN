@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { captureScreen, getActiveAppName } from "../skills/screenshot.js";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
-const MODEL = process.env.GWEN_VISION_MODEL || "claude-sonnet-4-6";
+const MODEL = process.env.GWEN_VISION_MODEL || "claude-haiku-4-5-20251001";
 
 const SCREEN_PROMPT = `You are Gwen's vision module. Given a screenshot, describe what the user is
 currently working on in 1–2 sentences. Focus on: app name, content summary,

@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "outDir": "dist-test",
+    "noEmit": false,
+    "noCheck": true,
+    "sourceMap": false
+  },
+  "include": [
+    "src/skills/dateParse.ts",
+    "src/skills/intent.ts",
+    "src/skills/storage.ts",
+    "src/tools/tasks.ts",
+    "tests"
+  ],
+  "exclude": ["dist", "dist-electron", "dist-test", "node_modules"]
+}

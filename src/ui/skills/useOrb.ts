@@ -8,7 +8,7 @@ import { useEffect, useState, useRef } from "react";
 //   speaking  → CYAN #00B4D8 (output / offset plate)
 const STATE_CONFIG = {
   idle:      { color: "#8B0000", pulseHz: 0.3, particles: 3000 },
-  listening: { color: "#ED1C24", pulseHz: 1.5, particles: 4000 },
+  listening: { color: "#2979FF", pulseHz: 1.5, particles: 4000 },
   thinking:  { color: "#E91E63", pulseHz: 0.8, particles: 3500 },
   speaking:  { color: "#00B4D8", pulseHz: 1.0, particles: 5000 },
 };

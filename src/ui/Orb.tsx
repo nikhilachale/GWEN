@@ -83,6 +83,14 @@ export default function Orb() {
           from { transform: translate(-50%, -50%) scale(var(--reactive-scale)) rotate(0deg); }
           to   { transform: translate(-50%, -50%) scale(var(--reactive-scale)) rotate(360deg); }
         }
+        @keyframes gwen-listen-ripple {
+          0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0.9; }
+          100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; }
+        }
+        @keyframes gwen-listen-bounce {
+          0%, 80%, 100% { transform: translateY(0); opacity: 0.6; }
+          40%           { transform: translateY(-10px); opacity: 1; }
+        }
       `}</style>
 
       {/* Static spider web — concentric rings + radial spokes */}
@@ -131,7 +139,7 @@ export default function Orb() {
       </svg>
 
       {/* Two pulse rings traveling outward — energy in the web threads */}
-      {[0, 1].map((i) => (
+      {state !== "listening" && [0, 1].map((i) => (
         <svg
           key={`pulse-${i}`}
           viewBox="0 0 200 200"
@@ -150,6 +158,36 @@ export default function Orb() {
           />
         </svg>
       ))}
+
+      {/* Listening: outward ripple rings + 3 bouncing dots */}
+      {state === "listening" && (
+        <>
+          {[0, 1, 2].map((i) => (
+            <div
+              key={`ripple-${i}`}
+              style={{
+                ...styles.ripple,
+                borderColor: stateColor,
+                boxShadow: `0 0 12px ${stateColor}`,
+                animation: `gwen-listen-ripple 1.6s ease-out ${i * 0.5}s infinite`,
+              }}
+            />
+          ))}
+          <div style={styles.dots}>
+            {[0, 1, 2].map((i) => (
+              <span
+                key={`dot-${i}`}
+                style={{
+                  ...styles.dot,
+                  background: stateColor,
+                  boxShadow: `0 0 8px ${stateColor}`,
+                  animation: `gwen-listen-bounce 1s ease-in-out ${i * 0.15}s infinite`,
+                }}
+              />
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Soft core glow behind the spider — blends state color with red */}
       <div style={{ ...styles.coreGlow, background: `radial-gradient(circle, ${stateColor}55 0%, ${SPIDEY_RED}33 40%, transparent 70%)` }} />
@@ -206,6 +244,32 @@ const styles: Record<string, React.CSSProperties> = {
     transform: "translate(-50%, -50%)",
     filter: "blur(14px)",
     pointerEvents: "none",
+  },
+  ripple: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    width: "55%",
+    height: "55%",
+    borderRadius: "50%",
+    border: "2px solid",
+    pointerEvents: "none",
+  },
+  dots: {
+    position: "absolute",
+    top: "calc(50% + 80px)",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    display: "flex",
+    gap: "10px",
+    pointerEvents: "none",
+    zIndex: 2,
+  },
+  dot: {
+    width: "10px",
+    height: "10px",
+    borderRadius: "50%",
+    display: "inline-block",
   },
   spider: {
     position: "absolute",

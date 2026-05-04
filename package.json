@@ -18,6 +18,9 @@
     "test:brain": "npm run build:electron && node dist-electron/scripts/test-brain.js",
     "test:voice": "npm run build:electron && node dist-electron/scripts/test-voice.js",
     "test:tts": "npm run build:electron && node dist-electron/scripts/test-tts.js",
+    "build:test": "tsc -p tsconfig.test.json",
+    "test": "npm run build:test && node --test dist-test/tests/*.test.js",
+    "test:coverage": "npm run build:test && node --test --experimental-test-coverage dist-test/tests/*.test.js",
     "rebuild:node": "npm rebuild better-sqlite3",
     "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
     "postinstall": "electron-rebuild -f -w better-sqlite3 || echo 'electron-rebuild skipped'"

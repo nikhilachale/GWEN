@@ -10,7 +10,7 @@
 - **Node.js / ESM** — all backend logic (no Python, no CommonJS)
 - **React + Vite** — renderer UI
 - **Three.js** — audio-reactive orb visualization
-- **Claude API** (`claude-sonnet-4-20250514`) — brain + tool_use
+- **Claude API** (`claude-haiku-4-5-20251001`) — brain + tool_use
 - **Whisper API** — speech-to-text
 - **ElevenLabs** — JARVIS-style text-to-speech
 - **Google APIs** — Calendar (read) + Gmail (read-only)

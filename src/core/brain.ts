@@ -1,8 +1,9 @@
 // src/core/brain.js — Claude orchestrator + tool-use loop
 import Anthropic from "@anthropic-ai/sdk";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, access, unlink } from "node:fs/promises";
 import path from "node:path";
 import { PROJECT_ROOT } from "../skills/projectRoot.js";
+import { SELF_RESTART_MARKER } from "../skills/relaunch.js";
 
 import * as calendarTool from "../tools/calendar.js";
 import * as emailTool    from "../tools/email.js";
@@ -14,6 +15,7 @@ import * as dayPlanTool  from "../tools/dayplan.js";
 import * as codegenTool  from "../tools/codegen.js";
 import * as selfFixTool  from "../tools/selfFix.js";
 import * as repairSelfTool from "../tools/repairSelf.js";
+import * as restartTool   from "../tools/restart.js";
 import * as macTool      from "../tools/macControl.js";
 import * as filesTool    from "../tools/files.js";
 import * as systemTool   from "../tools/system.js";
@@ -26,8 +28,10 @@ import * as callsTool    from "../tools/calls.js";
 import * as timersTool   from "../tools/timers.js";
 import * as weatherTool  from "../tools/weather.js";
 import * as screenCore   from "./screen.js";
+import { extractAndSaveFacts, getAutoFactsBlock, forgetAutoFact } from "../skills/passiveMemory.js";
+import { getAmbientContext, formatAmbientForPrompt } from "../skills/ambientContext.js";
 
-const MODEL = process.env.GWEN_BRAIN_MODEL || "claude-sonnet-4-6";
+const MODEL = process.env.GWEN_BRAIN_MODEL || "claude-haiku-4-5-20251001";
 const MAX_TOOL_TURNS = 8;
 
 // Conversation context: keep the last N user/assistant text exchanges so Gwen
@@ -44,20 +48,35 @@ let conversationHistory = [];
 let lastTurnAt = 0;
 let resumedOnLoad = false;
 
+// Only resume the prior conversation when this restart was self-initiated
+// (a self-fix or repair-self). Manual quit-and-relaunch should always start
+// clean — the marker is written by skills/relaunch.ts right before the app
+// exits, and consumed (deleted) here so the next launch is fresh by default.
+let isSelfRestart = false;
 try {
-  const raw = await readFile(CONV_PATH, "utf8");
-  const saved = JSON.parse(raw);
-  if (
-    Array.isArray(saved?.history) &&
-    typeof saved.savedAt === "number" &&
-    Date.now() - saved.savedAt < CONTEXT_IDLE_RESET_MS
-  ) {
-    conversationHistory = saved.history;
-    lastTurnAt = saved.savedAt;
-    resumedOnLoad = true;
-    console.log(`[brain] resumed conversation (${saved.history.length} msgs)`);
-  }
-} catch {} // first launch or corrupt file — start fresh
+  await access(SELF_RESTART_MARKER);
+  isSelfRestart = true;
+  await unlink(SELF_RESTART_MARKER).catch(() => {});
+} catch {} // no marker = manual launch
+
+if (isSelfRestart) {
+  try {
+    const raw = await readFile(CONV_PATH, "utf8");
+    const saved = JSON.parse(raw);
+    if (
+      Array.isArray(saved?.history) &&
+      typeof saved.savedAt === "number" &&
+      Date.now() - saved.savedAt < CONTEXT_IDLE_RESET_MS
+    ) {
+      conversationHistory = saved.history;
+      lastTurnAt = saved.savedAt;
+      resumedOnLoad = true;
+      console.log(`[brain] resumed conversation (${saved.history.length} msgs, self-restart)`);
+    }
+  } catch {} // first launch or corrupt file — start fresh
+} else {
+  console.log("[brain] manual launch — starting fresh");
+}
 
 export function wasResumed() {
   return resumedOnLoad;
@@ -96,6 +115,8 @@ function recordExchange(userInput, assistantText) {
   }
   lastTurnAt = Date.now();
   persistConversation();
+  // Fire-and-forget passive memory extraction. Never blocks the speech loop.
+  extractAndSaveFacts({ userInput, assistantText }).catch(() => {});
 }
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
@@ -204,6 +225,17 @@ const TOOLS = [
     },
   },
   {
+    name: "forget_memory",
+    description: "Forget a passively-learned fact about the user. Use when the user says 'forget that I X', 'I don't actually X anymore', or otherwise corrects something you've stored. The key is the snake_case topic (e.g. 'lives_in', 'sister_name') — the 'auto_' prefix is added automatically. If unsure of the exact key, just pass the topic word and Gwen will try.",
+    input_schema: {
+      type: "object",
+      properties: {
+        key: { type: "string", description: "Snake_case topic key, e.g. 'lives_in'." },
+      },
+      required: ["key"],
+    },
+  },
+  {
     name: "get_day_plan",
     description: "Generate the morning briefing combining calendar, tasks, and memory.",
     input_schema: {
@@ -247,6 +279,14 @@ const TOOLS = [
         },
       },
       required: ["description"],
+    },
+  },
+  {
+    name: "relaunch_self",
+    description: "Restart Gwen (the Electron app) without modifying any code. Use this when the user explicitly asks you to restart, relaunch, reload, or reboot yourself. Conversation context is preserved across the restart. Distinct from fix_self_code (which edits source) and repair_self (which runs maintenance commands) — relaunch_self does no work, just bounces the app.",
+    input_schema: {
+      type: "object",
+      properties: {},
     },
   },
   {
@@ -326,6 +366,17 @@ const TOOLS = [
         draftOnly: { type: "boolean", description: "If true, type message but don't press send. Default false." },
       },
       required: ["contact", "message"],
+    },
+  },
+  {
+    name: "scroll_mouse",
+    description: "Scroll the currently focused window up or down by a given number of lines. Uses macOS CGEvent scroll-wheel synthesis. Requires Accessibility permission.",
+    input_schema: {
+      type: "object",
+      properties: {
+        direction: { type: "string", enum: ["up", "down"], description: "Default 'down'." },
+        amount:    { type: "number", description: "Number of scroll lines. Default 5." },
+      },
     },
   },
   {
@@ -625,15 +676,21 @@ const handlers = {
   get_notes:          (i) => notesTool.search(i),
   remember:           (i) => memoryTool.remember(i),
   recall:             (i) => memoryTool.recall(i),
+  forget_memory:      (i) => {
+    const ok = forgetAutoFact(i?.key || "");
+    return ok ? "Forgotten." : "Nothing stored under that key.";
+  },
   get_day_plan:       (i) => dayPlanTool.run(i),
   build_software:     (i) => codegenTool.run(i),
   fix_self_code:      (i) => selfFixTool.run(i),
   repair_self:        (i) => repairSelfTool.run(i),
+  relaunch_self:      ()  => restartTool.run(),
   get_screen_context: (i) => screenCore.getScreenContext(i?.focus),
   open_app:           (i) => macTool.openApp(i),
   type_text:          (i) => macTool.typeText(i),
   send_imessage:      (i) => macTool.sendIMessage(i),
   send_whatsapp:      (i) => macTool.sendWhatsApp(i),
+  scroll_mouse:       (i) => macTool.scrollMouse(i),
   list_files:         (i) => filesTool.listFiles(i),
   open_path:          (i) => filesTool.openPath(i),
   set_volume:         (i) => systemTool.setVolume(i),
@@ -666,9 +723,9 @@ const handlers = {
 };
 
 // ─── System prompt ───────────────────────────────────────────────────
-function buildSystemPrompt({ userName, userNickname, intentHint }) {
+function buildSystemPrompt({ userName, userNickname, intentHint, ambient }) {
   const date = new Date().toDateString();
-  const name = userName || "Nikhil";
+  const name = userName || "Miles";
   // Spider-Verse personas: Spidey, Miles, Peter — all of them are "her"
   // Spider-Man and trigger the same Gwen Stacy bond.
   const spiderVerse = userNickname &&
@@ -735,6 +792,8 @@ Tool routing:
 - inbox, mail, messages from email → get_emails
 - "remember that..." → remember
 - "what do I prefer..." or recalling user info → recall first
+- "forget that..." / "I don't X anymore" / correcting something you said you knew
+  about the user → forget_memory with the snake_case topic key
 - "build / create / make me" software → build_software
 - "you're broken" / "fix yourself" / "change how you do X" / any complaint about
   Gwen's own behavior or code → fix_self_code (confirm the change first)
@@ -742,6 +801,11 @@ Tool routing:
   self-register", ABI mismatch), missing-dependency errors, or build cache issues
   → repair_self (confirm the action first). Use rebuild_electron for native ABI
   errors, npm_install after a dependency change, clear_cache for stale builds.
+- "restart yourself" / "relaunch" / "reload" / "reboot" with no other context
+  → relaunch_self. No confirmation needed, no code work — just bounce. Say
+  one short sentence ("restarting now") and call the tool on the same turn.
+  Do NOT use fix_self_code or repair_self for a plain restart — those do work
+  first and are slower.
 - "what's on my screen" → get_screen_context
 - "open / launch / start" an app → open_app
 - "what's in [folder]", "list my desktop", "show me downloads" → list_files
@@ -795,6 +859,9 @@ Don't call tools you don't need.
 If a tool returns an error, don't read the error verbatim. Briefly say it didn't
 work and offer the next sensible step.`;
 
+  prompt += getAutoFactsBlock();
+  prompt += formatAmbientForPrompt(ambient);
+
   if (intentHint && intentHint.confidence >= 0.7) {
     prompt += `\n\nDetected intent: ${intentHint.type} (confidence ${intentHint.confidence}).`;
   }
@@ -809,10 +876,11 @@ work and offer the next sensible step.`;
  * @param {{ intentHint?: object }} [opts]
  * @returns {Promise<string>} Final spoken text.
  */
-export async function runBrain(userInput, opts = {}) {
-  const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Nikhil";
+export async function runBrain(userInput, opts: Record<string, any> = {}) {
+  const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Miles";
   const userNickname = await safeRecall("user_nickname");
-  const system = buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint });
+  const ambient = opts.skipAmbient ? null : await getAmbientContext().catch(() => null);
+  const system = buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint, ambient });
 
   const messages = [...getHistoryForTurn(), { role: "user", content: userInput }];
 
@@ -878,24 +946,26 @@ export async function runBrain(userInput, opts = {}) {
  * @param {{ intentHint?: object }} [opts]
  * @returns {Promise<string>}
  */
-export async function runBrainStream(userInput, onSentence = () => {}, opts = {}) {
-  const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Nikhil";
+export async function runBrainStream(userInput, onSentence = () => {}, opts: Record<string, any> = {}) {
+  const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Miles";
   const userNickname = await safeRecall("user_nickname");
-  const system = buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint });
+  const ambient = opts.skipAmbient ? null : await getAmbientContext().catch(() => null);
+  const system = buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint, ambient });
   const messages = [...getHistoryForTurn(), { role: "user", content: userInput }];
 
   let fullText = "";
   let turn = 0;
 
   while (turn <= MAX_TOOL_TURNS) {
-    const stream = client.messages.stream({
+    const streamOpts = {
       model: MODEL,
       max_tokens: 1024,
-    temperature: 0.2,
+      temperature: 0.2,
       system,
-      tools: TOOLS,
       messages,
-    });
+    };
+    if (!opts.noTools) streamOpts.tools = TOOLS;
+    const stream = client.messages.stream(streamOpts);
 
     let buffer = "";
     let turnText = "";
