@@ -105,7 +105,7 @@ IDLE ──(wake word)──▶ LISTENING ──(silence detected)──▶ THIN
 ## 3. Calendar Agent
 
 **File:** `agents/calendar-agent/agent.md`
-**Role:** Reads and interprets Google Calendar events
+**Role:** Reads and interprets calendar events from either Google Calendar or macOS Calendar.app
 **Claude tool name:** `get_calendar`
 **Scoped system prompt (used when calendar-agent is invoked standalone):**
 
@@ -122,15 +122,12 @@ empty, say so concisely.
 - `getNextEvent()` — single next upcoming event
 - `searchEvents(query)` — keyword search in event titles
 
-### OAuth Scopes Required
-```
-https://www.googleapis.com/auth/calendar.readonly
-```
+### Backends
+- **macOS Calendar.app** (default) — read via JXA / AppleScript. No OAuth. Picks up every account already configured in Calendar.app (iCloud, Google, Exchange). First run triggers a TCC prompt under System Settings → Privacy & Security → Calendars.
+- **Google Calendar API** (alternate) — read directly via `googleapis` if you'd rather skip Calendar.app. Requires OAuth scope `https://www.googleapis.com/auth/calendar.readonly`. Token stored at `data/google-token.json` (gitignored), refresh handled automatically by the SDK.
 
 ### Notes
-- Token stored at `data/google-token.json` (gitignored)
-- Refresh token handled automatically by `googleapis` SDK
-- Return format: array of `{ title, start, end, location, description }`
+- Return format: array of `{ title, start, end, location, description }` (Calendar.app backend also includes `calendar` name)
 
 ---
 

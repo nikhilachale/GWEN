@@ -1,13 +1,14 @@
 # Calendar Agent
 
-> Reads Google Calendar events and summarizes them for voice.
+> Reads calendar events from either macOS Calendar.app or Google Calendar and summarizes them for voice.
 > Tool name: `get_calendar` — invoked by the Orchestrator via `tool_use`.
 
 ---
 
 ## Role
 
-The Calendar Agent is read-only. It queries Google Calendar, returns
+The Calendar Agent is read-only. It queries the user's calendar (macOS
+Calendar.app by default, Google Calendar API as an alternate), returns
 structured event data to the Orchestrator, and (when invoked standalone)
 synthesizes voice-friendly summaries.
 
@@ -36,7 +37,7 @@ is invoked directly by another sub-agent (e.g. the Planner Agent).
 ```js
 {
   name: "get_calendar",
-  description: "Get upcoming Google Calendar events for the next N days.",
+  description: "Get upcoming events from the macOS Calendar.app (or Google Calendar) for the next N days.",
   input_schema: {
     type: "object",
     properties: {
@@ -83,24 +84,24 @@ Orchestrator never needs them, and they pollute Claude's context window.
 
 ---
 
-## OAuth Scopes
+## Backends
 
-```
-https://www.googleapis.com/auth/calendar.readonly
-```
+### macOS Calendar.app (default)
+- Read via JXA (`osascript -l JavaScript`) against `Application('Calendar')`
+- No OAuth, no API keys — picks up every account already configured in Calendar.app (iCloud, Google, Exchange)
+- First run triggers a TCC prompt: System Settings → Privacy & Security → Calendars
+- Read-only by convention — this agent never writes events
 
-That's the **only** scope this agent requests. Never request `calendar`
-(read-write), `calendar.events`, or any broader scope.
-
-Token storage and refresh is handled by `skill:oauth`. Token file path is
-configured via `GOOGLE_TOKEN_PATH` (default: `./data/google-token.json`),
-which is gitignored.
+### Google Calendar API (alternate)
+- Read via `googleapis` SDK
+- Only scope ever requested: `https://www.googleapis.com/auth/calendar.readonly` — never `calendar` (read-write), `calendar.events`, or any broader scope
+- Token storage and refresh handled by `skill:oauth`. Token file path configured via `GOOGLE_TOKEN_PATH` (default: `./data/google-token.json`), gitignored
 
 ---
 
 ## Dependencies (Skills)
 
-- `skill:oauth` — Google OAuth2 client + auto-refresh
+- `skill:oauth` — Google OAuth2 client + auto-refresh (only required for the Google backend)
 - `skill:date-parse` — relative time formatting (`"tomorrow at 3pm"`)
 
 ---
@@ -124,12 +125,13 @@ prep sync on Wednesday morning, and the launch retro on Friday at four."
 
 ## Error Handling
 
-- If the OAuth token is missing or unrefreshable → return string: `"I don't have
-  access to your calendar yet. Run the setup script to connect it."`
-- If the Google API returns a network error → return string: `"I can't reach
-  Google Calendar right now."`
-- If the calendar has zero events in range → return string: `"Your calendar is
-  clear."`
+- **macOS backend**, TCC permission denied → return string: `"I need Calendar
+  access. Grant it in System Settings → Privacy & Security → Calendars."`
+- **Google backend**, OAuth token missing or unrefreshable → return string:
+  `"I don't have access to your calendar yet. Run the setup script to connect it."`
+- Either backend, transport/network error → return string: `"I can't reach
+  Calendar right now."`
+- Calendar has zero events in range → return string: `"Your calendar is clear."`
 
 Never throw — always return a voice-friendly fallback string. The
 Orchestrator will speak it directly.

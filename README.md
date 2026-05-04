@@ -50,14 +50,15 @@ You need at minimum:
 
 Google + Tavily + Porcupine keys are optional — Gwen degrades gracefully without them.
 
-### 4. (Optional) Connect Google
+### 4. (Optional) Connect Gmail
 
 ```bash
 npm run setup-oauth
 ```
 
-This opens a browser, you grant `calendar.readonly` + `gmail.readonly`, and the
-token is saved to `data/google-token.json`.
+This opens a browser, you grant `gmail.readonly`, and the token is saved to
+`data/google-token.json`. Skip this if you don't want email — calendar reads
+straight from macOS Calendar.app, no OAuth required.
 
 ### 5. Run
 
@@ -72,7 +73,7 @@ Vite serves the renderer on `localhost:5173`, Electron picks it up.
 ## What Gwen can do
 
 ### Productivity
-- **Calendar** — read upcoming Google Calendar events
+- **Calendar** — read upcoming events from macOS Calendar.app (covers iCloud, Google, Exchange — whatever accounts you've added there)
 - **Email** — check unread Gmail (read-only by design)
 - **Tasks** — local task store (`add_task`, `get_tasks`)
 - **Notes** — local markdown notes (`save_note`, `get_notes`)
@@ -118,7 +119,8 @@ Vite serves the renderer on `localhost:5173`, Electron picks it up.
 - ElevenLabs streaming TTS with audio-reactive orb
 - SQLite memory, JSON tasks, markdown notes
 - Tavily search
-- Google Calendar + Gmail (after `npm run setup-oauth`)
+- macOS Calendar.app (no setup — first run triggers a TCC prompt)
+- Gmail (after `npm run setup-oauth`)
 - Screen capture (asks for permission on first use, macOS)
 - All macOS system + native-app tools listed above
 
@@ -128,7 +130,7 @@ Vite serves the renderer on `localhost:5173`, Electron picks it up.
 - **Claude Code build pipeline** — works if `claude` CLI is on `$PATH`
 - **Bluetooth control** — `brew install blueutil`
 - **Phone calls** — paired iPhone with *Calls on Other Devices* enabled
-- **Reminders / Notes / Music control** — accept the macOS Automation prompts on first use (System Settings → Privacy & Security → Automation)
+- **Calendar / Reminders / Notes / Music control** — accept the macOS Automation prompts on first use (System Settings → Privacy & Security → Automation)
 
 ---
 
@@ -153,7 +155,7 @@ See `agents/AGENTS.md` for the full hub-and-spoke agent topology.
 
 | Category | Tools |
 |---|---|
-| Calendar / Email | `get_calendar`, `get_emails` |
+| Calendar (macOS) / Email (Gmail) | `get_calendar`, `get_emails` |
 | Tasks / Notes | `add_task`, `get_tasks`, `save_note`, `get_notes` |
 | Memory | `remember`, `recall` |
 | Day plan | `get_day_plan` |

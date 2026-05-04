@@ -104,7 +104,7 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
 const TOOLS = [
   {
     name: "get_calendar",
-    description: "Get upcoming Google Calendar events for the next N days.",
+    description: "Get upcoming events from the macOS Calendar.app for the next N days. Reads all local accounts (iCloud, Google, Exchange) — no OAuth needed.",
     input_schema: {
       type: "object",
       properties: {
