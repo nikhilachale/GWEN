@@ -19,7 +19,7 @@
 
 html, body, #root {
   height: 100%;
-  background: var(--black);
+  background: transparent;
   color: #f5f5f5;
   font-family: 'JetBrains Mono', 'Space Mono', 'Rajdhani', 'Exo 2', ui-monospace, 'SF Mono', monospace;
   overflow: hidden;
@@ -27,14 +27,16 @@ html, body, #root {
 }
 
 /*
- * 80% black, with a very subtle red grid + faint cyan scanline so the
- * background reads as "comic-book newsprint" without competing with the
- * orb. Both effects are dialed low — the eye should stop on the orb.
+ * Fullscreen overlay: body is mostly opaque black so Gwen reads as a
+ * "panel" floating on the desktop, but the four background layers stack
+ * up the comic-newsprint texture (vignette + red grid + cyan scanlines +
+ * Ben-Day halftone dots).
  */
 body {
-  background-color: var(--black);
+  background-color: rgba(17, 17, 17, 0.92);
   background-image:
-    radial-gradient(ellipse at center, rgba(237, 28, 36, 0.08) 0%, rgba(17, 17, 17, 1) 75%),
+    radial-gradient(ellipse at center, rgba(237, 28, 36, 0.10) 0%, rgba(17, 17, 17, 0.0) 70%),
+    radial-gradient(circle, rgba(237, 28, 36, 0.14) 0.9px, transparent 1.2px),
     linear-gradient(rgba(237, 28, 36, 0.04) 1px, transparent 1px),
     linear-gradient(90deg, rgba(237, 28, 36, 0.04) 1px, transparent 1px),
     repeating-linear-gradient(
@@ -44,7 +46,31 @@ body {
       transparent 1px,
       transparent 3px
     );
-  background-size: 100% 100%, 40px 40px, 40px 40px, 100% 3px;
+  background-size: 100% 100%, 6px 6px, 40px 40px, 40px 40px, 100% 3px;
+  animation: gwen-bg-drift 30s linear infinite;
+}
+
+/*
+ * Inner vignette/glow ring at the screen edge — frames the desktop-overlay
+ * panel and softens the rectangle so it doesn't read as a flat window.
+ */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 200px rgba(0, 0, 0, 0.95), inset 0 0 60px rgba(237, 28, 36, 0.08);
+  z-index: 1000;
+}
+
+/*
+ * Subtle CRT-style scanline drift on the cyan layer (last background-image
+ * slot). Grid + radial stay put so the scene feels stable; only the 3px
+ * scanline flows downward — 120px = 40 stripe cycles, clean loop.
+ */
+@keyframes gwen-bg-drift {
+  from { background-position: 0 0, 0 0, 0 0, 0 0, 0 0; }
+  to   { background-position: 0 0, 0 0, 0 0, 0 0, 0 -120px; }
 }
 
 button {

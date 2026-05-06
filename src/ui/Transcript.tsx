@@ -1,12 +1,16 @@
 // src/ui/Transcript.tsx — live conversation feed
 import React, { useEffect, useState, useRef } from "react";
 
-const MAX_LINES = 8;
+const MAX_LINES = 50;
+// If the user scrolls up by more than this many pixels from the bottom,
+// stop auto-scrolling so they can read history without being yanked back.
+const STICK_THRESHOLD = 40;
 
 export default function Transcript() {
   const [lines, setLines] = useState([]);
   const [codeOutput, setCodeOutput] = useState("");
   const containerRef = useRef(null);
+  const stickToBottomRef = useRef(true);
 
   useEffect(() => {
     if (!window.gwenBridge) return;
@@ -25,34 +29,67 @@ export default function Transcript() {
     };
   }, []);
 
+  const handleScroll = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = distanceFromBottom < STICK_THRESHOLD;
+  };
+
   useEffect(() => {
-    if (containerRef.current) {
+    if (!containerRef.current) return;
+    if (stickToBottomRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
   }, [lines, codeOutput]);
 
   return (
-    <div ref={containerRef} style={styles.wrap}>
-      {lines.map((l, i) => {
-        const age = lines.length - i;
-        const opacity = Math.max(0.25, 1 - age * 0.1);
-        return (
-          <div
-            key={`${l.ts}-${i}`}
-            style={{
-              ...styles.line,
-              ...(l.role === "user" ? styles.user : styles.assistant),
-              opacity,
-            }}
-          >
-            <span style={styles.role}>{l.role === "user" ? "you" : "Gwen"}</span>
-            <span style={styles.text}>{l.text}</span>
-          </div>
-        );
-      })}
-      {codeOutput && (
-        <pre style={styles.code}>{codeOutput}</pre>
-      )}
+    <div ref={containerRef} onScroll={handleScroll} className="gwen-transcript" style={styles.wrap}>
+      <style>{`
+        @keyframes gwen-line-enter {
+          from { transform: translateY(8px) scale(0.98); }
+          to   { transform: translateY(0) scale(1); }
+        }
+        @keyframes gwen-code-enter {
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        /* Faint cyan scrollbar so it reads as part of the HUD */
+        .gwen-transcript::-webkit-scrollbar { width: 6px; }
+        .gwen-transcript::-webkit-scrollbar-track { background: rgba(237, 28, 36, 0.05); }
+        .gwen-transcript::-webkit-scrollbar-thumb {
+          background: rgba(237, 28, 36, 0.4);
+          border-radius: 3px;
+        }
+        .gwen-transcript::-webkit-scrollbar-thumb:hover {
+          background: rgba(237, 28, 36, 0.7);
+        }
+      `}</style>
+      <div className="gwen-transcript-inner">
+        {lines.map((l, i) => {
+          // Newest 8 lines stay full opacity; older lines fade gently so the
+          // scrollback reads as historical without becoming illegible.
+          const ageFromTop = lines.length - i;
+          const opacity = ageFromTop <= 8 ? 1 : Math.max(0.5, 1 - (ageFromTop - 8) * 0.04);
+          return (
+            <div
+              key={`${l.ts}-${i}`}
+              style={{
+                ...styles.line,
+                ...(l.role === "user" ? styles.user : styles.assistant),
+                opacity,
+                animation: "gwen-line-enter 400ms ease-out",
+              }}
+            >
+              <span style={styles.role}>{l.role === "user" ? "you" : "Gwen"}</span>
+              <span style={styles.text}>{l.text}</span>
+            </div>
+          );
+        })}
+        {codeOutput && (
+          <pre style={{ ...styles.code, animation: "gwen-code-enter 450ms ease-out" }}>{codeOutput}</pre>
+        )}
+      </div>
     </div>
   );
 }
@@ -60,16 +97,21 @@ export default function Transcript() {
 const styles = {
   wrap: {
     position: "absolute",
-    bottom: 60,
-    left: 0,
-    right: 0,
-    maxHeight: "30vh",
+    bottom: 80,
+    left: "50%",
+    transform: "translateX(-50%)",
+    width: "100%",
+    maxWidth: 720,
+    maxHeight: "40vh",
     overflowY: "auto",
-    padding: "0 48px",
+    padding: "0 24px",
     display: "flex",
     flexDirection: "column",
     gap: 8,
-    pointerEvents: "none",
+    // Pointer events ON so the user can scroll. Individual lines remain
+    // non-interactive (just text), but the container needs to receive
+    // wheel/touch events.
+    pointerEvents: "auto",
   },
   // Miles palette: 80% black, red bubbles for user, magenta-tinted for
   // Gwen, cyan tint for code panel. Role labels get the chromatic offset.

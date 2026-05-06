@@ -29,6 +29,11 @@ contextBridge.exposeInMainWorld("gwenBridge", {
     ipcRenderer.on("gwen:self-fix", handler);
     return () => ipcRenderer.removeListener("gwen:self-fix", handler);
   },
+  onContextPanel: (cb) => {
+    const handler = (_, v) => cb(v);
+    ipcRenderer.on("gwen:context-panel", handler);
+    return () => ipcRenderer.removeListener("gwen:context-panel", handler);
+  },
 
   // outgoing
   triggerListen: () => ipcRenderer.send("gwen:trigger", "listen"),

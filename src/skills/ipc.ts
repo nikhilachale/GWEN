@@ -32,3 +32,9 @@ export function sendCodeOutput(chunk) {
 export function sendSelfFix(active, label) {
   safeSend("gwen:self-fix", { active: !!active, label: label || "" });
 }
+
+// Show structured tool output as a side panel (tasks, calendar, emails…).
+// Pass type=null to hide the panel.
+export function sendContextPanel(type, data) {
+  safeSend("gwen:context-panel", { type, data });
+}

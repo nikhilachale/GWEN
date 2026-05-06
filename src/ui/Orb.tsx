@@ -79,9 +79,9 @@ export default function Orb() {
           0%, 100% { filter: drop-shadow(0 0 4px ${RED}) drop-shadow(0 0 10px ${RED_DEEP}); }
           50%      { filter: drop-shadow(-1.5px 0 0 ${MAGENTA}) drop-shadow(1.5px 0 0 ${CYAN}) drop-shadow(0 0 12px ${RED}); }
         }
-        @keyframes gwen-spider-rotate {
-          from { transform: translate(-50%, -50%) scale(var(--reactive-scale)) rotate(0deg); }
-          to   { transform: translate(-50%, -50%) scale(var(--reactive-scale)) rotate(360deg); }
+        @keyframes gwen-orb-float {
+          0%, 100% { transform: translateY(0); }
+          50%      { transform: translateY(-6px); }
         }
         @keyframes gwen-listen-ripple {
           0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0.9; }
@@ -108,7 +108,10 @@ export default function Orb() {
           stroke="url(#web-fade)"
           strokeWidth="1.1"
           strokeLinecap="round"
-          style={{ filter: `drop-shadow(0 0 3px ${stateColor})` }}
+          style={{
+            filter: `drop-shadow(0 0 3px ${stateColor})`,
+            transition: "filter 350ms ease-out",
+          }}
         >
           {Array.from({ length: SPOKE_COUNT }).map((_, i) => {
             const angle = (i / SPOKE_COUNT) * 360;
@@ -125,6 +128,7 @@ export default function Orb() {
           style={{
             filter: `drop-shadow(0 0 4px ${stateColor})`,
             animation: `gwen-pulse-glow ${speed}s ease-in-out infinite`,
+            transition: "filter 350ms ease-out",
           }}
         >
           {ringRadii.map((r, i) => (
@@ -190,7 +194,13 @@ export default function Orb() {
       )}
 
       {/* Soft core glow behind the spider — blends state color with red */}
-      <div style={{ ...styles.coreGlow, background: `radial-gradient(circle, ${stateColor}55 0%, ${SPIDEY_RED}33 40%, transparent 70%)` }} />
+      <div
+        style={{
+          ...styles.coreGlow,
+          background: `radial-gradient(circle, ${stateColor}55 0%, ${SPIDEY_RED}33 40%, transparent 70%)`,
+          transition: "background 350ms ease-out",
+        }}
+      />
 
       {/* Spider symbol — kept upright; reacts to audio */}
       <img
@@ -213,6 +223,7 @@ const styles: Record<string, React.CSSProperties> = {
     position: "relative",
     overflow: "visible",
     background: "transparent",
+    animation: "gwen-orb-float 6s ease-in-out infinite",
   },
   web: {
     position: "absolute",

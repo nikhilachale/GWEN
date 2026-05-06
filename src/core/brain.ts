@@ -30,6 +30,18 @@ import * as weatherTool  from "../tools/weather.js";
 import * as screenCore   from "./screen.js";
 import { extractAndSaveFacts, getAutoFactsBlock, forgetAutoFact } from "../skills/passiveMemory.js";
 import { getAmbientContext, formatAmbientForPrompt } from "../skills/ambientContext.js";
+import { sendContextPanel } from "../skills/ipc.js";
+
+// Push the current open task list to the renderer so the user can see it on
+// screen whenever a task tool fires.
+function broadcastTasks() {
+  try {
+    const open = tasksTool.getAll().filter((t) => !t.done);
+    sendContextPanel("tasks", open);
+  } catch (err) {
+    console.debug("[brain] task broadcast failed:", err.message);
+  }
+}
 
 const MODEL = process.env.GWEN_BRAIN_MODEL || "claude-haiku-4-5-20251001";
 const MAX_TOOL_TURNS = 8;
@@ -670,8 +682,16 @@ const handlers = {
   get_calendar:       (i) => calendarTool.run(i),
   get_emails:         (i) => emailTool.run(i),
   search_web:         (i) => searchTool.run(i),
-  add_task:           (i) => tasksTool.add(i),
-  get_tasks:          (i) => tasksTool.list(i),
+  add_task:           async (i) => {
+    const result = await tasksTool.add(i);
+    broadcastTasks();
+    return result;
+  },
+  get_tasks:          async (i) => {
+    const result = await tasksTool.list(i);
+    broadcastTasks();
+    return result;
+  },
   save_note:          (i) => notesTool.save(i),
   get_notes:          (i) => notesTool.search(i),
   remember:           (i) => memoryTool.remember(i),
