@@ -29,13 +29,26 @@ contextBridge.exposeInMainWorld("gwenBridge", {
     ipcRenderer.on("gwen:self-fix", handler);
     return () => ipcRenderer.removeListener("gwen:self-fix", handler);
   },
+  onCodeDiff: (cb) => {
+    const handler = (_, v) => cb(v);
+    ipcRenderer.on("gwen:code-diff", handler);
+    return () => ipcRenderer.removeListener("gwen:code-diff", handler);
+  },
   onContextPanel: (cb) => {
     const handler = (_, v) => cb(v);
     ipcRenderer.on("gwen:context-panel", handler);
     return () => ipcRenderer.removeListener("gwen:context-panel", handler);
   },
+  onActivity: (cb) => {
+    const handler = (_, v) => cb(v);
+    ipcRenderer.on("gwen:activity", handler);
+    return () => ipcRenderer.removeListener("gwen:activity", handler);
+  },
 
   // outgoing
   triggerListen: () => ipcRenderer.send("gwen:trigger", "listen"),
+  toggleFullscreen: () => ipcRenderer.send("gwen:toggle-fullscreen"),
   getState: () => ipcRenderer.invoke("gwen:get-state"),
+  getFixes: () => ipcRenderer.invoke("gwen:get-fixes"),
+  getTasks: () => ipcRenderer.invoke("gwen:get-tasks"),
 });

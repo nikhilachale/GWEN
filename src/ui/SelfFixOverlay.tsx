@@ -5,19 +5,23 @@ import React, { useEffect, useState } from "react";
 export default function SelfFixOverlay() {
   const [active, setActive] = useState(false);
   const [label, setLabel] = useState("");
+  const [diff, setDiff] = useState("");
 
   useEffect(() => {
     if (!window.gwenBridge) return;
-    const off = window.gwenBridge.onSelfFix(({ active, label }) => {
+    const offFix = window.gwenBridge.onSelfFix(({ active, label }) => {
       setActive(active);
       if (label) setLabel(label);
+      if (active) setDiff("");
     });
+    const offDiff = window.gwenBridge.onCodeDiff?.((d) => setDiff(d));
     return () => {
-      off && off();
+      offFix && offFix();
+      offDiff && offDiff();
     };
   }, []);
 
-  if (!active) return null;
+  if (!active && !diff) return null;
 
   return (
     <>
@@ -26,17 +30,41 @@ export default function SelfFixOverlay() {
         <div style={styles.scanline} />
         <div style={styles.row}>
           <span style={styles.dot} />
-          <span style={styles.label}>{label || "rewriting myself"}</span>
-          <span style={styles.dots}>
-            <span style={{ ...styles.tick, animationDelay: "0s" }}>.</span>
-            <span style={{ ...styles.tick, animationDelay: "0.2s" }}>.</span>
-            <span style={{ ...styles.tick, animationDelay: "0.4s" }}>.</span>
-          </span>
+          <span style={styles.label}>{active ? (label || "rewriting myself") : "fix applied"}</span>
+          {active && (
+            <span style={styles.dots}>
+              <span style={{ ...styles.tick, animationDelay: "0s" }}>.</span>
+              <span style={{ ...styles.tick, animationDelay: "0.2s" }}>.</span>
+              <span style={{ ...styles.tick, animationDelay: "0.4s" }}>.</span>
+            </span>
+          )}
         </div>
+        {diff && <DiffView diff={diff} />}
         <div style={styles.borderTop} />
         <div style={styles.borderBottom} />
       </div>
     </>
+  );
+}
+
+function DiffView({ diff }: { diff: string }) {
+  const lines = diff.split("\n");
+  return (
+    <div style={styles.diffBox}>
+      {lines.map((line, i) => {
+        let style: React.CSSProperties = styles.diffCtx;
+        if (line.startsWith("+++") || line.startsWith("---")) style = styles.diffHdr;
+        else if (line.startsWith("@@")) style = styles.diffHunk;
+        else if (line.startsWith("diff ")) style = styles.diffHdr;
+        else if (line.startsWith("+")) style = styles.diffAdd;
+        else if (line.startsWith("-")) style = styles.diffDel;
+        return (
+          <div key={i} style={style}>
+            {line || " "}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -143,5 +171,43 @@ const styles: Record<string, React.CSSProperties> = {
     background:
       "linear-gradient(90deg, transparent 0%, #ED1C24 50%, transparent 100%)",
     boxShadow: "0 0 8px #ED1C24",
+  },
+  diffBox: {
+    marginTop: 12,
+    maxHeight: "60vh",
+    maxWidth: "min(900px, 80vw)",
+    overflow: "auto",
+    fontFamily: "ui-monospace, 'SF Mono', monospace",
+    fontSize: 11,
+    letterSpacing: 0,
+    textTransform: "none",
+    lineHeight: 1.45,
+    background: "rgba(0,0,0,0.55)",
+    border: "1px solid rgba(237, 28, 36, 0.25)",
+    borderRadius: 3,
+    padding: "8px 10px",
+    position: "relative",
+    zIndex: 2,
+    whiteSpace: "pre",
+    pointerEvents: "auto",
+  },
+  diffAdd: {
+    color: "#7CFFB3",
+    background: "rgba(0, 255, 136, 0.08)",
+  },
+  diffDel: {
+    color: "#FF7B8A",
+    background: "rgba(237, 28, 36, 0.10)",
+  },
+  diffHunk: {
+    color: "#9DD9FF",
+    opacity: 0.9,
+  },
+  diffHdr: {
+    color: "#ED1C24",
+    opacity: 0.85,
+  },
+  diffCtx: {
+    color: "rgba(255,255,255,0.55)",
   },
 };

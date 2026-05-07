@@ -36,7 +36,7 @@ export default function SpeedLines() {
   const { state } = useOrb();
   const lines = useMemo(() => buildLines(), []);
 
-  const active = state === "thinking" || state === "speaking";
+  const active = state === "thinking";
 
   return (
     <div

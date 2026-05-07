@@ -27,10 +27,82 @@ import * as mapsTool     from "../tools/maps.js";
 import * as callsTool    from "../tools/calls.js";
 import * as timersTool   from "../tools/timers.js";
 import * as weatherTool  from "../tools/weather.js";
+import * as pdfTool      from "../tools/pdf.js";
 import * as screenCore   from "./screen.js";
 import { extractAndSaveFacts, getAutoFactsBlock, forgetAutoFact } from "../skills/passiveMemory.js";
 import { getAmbientContext, formatAmbientForPrompt } from "../skills/ambientContext.js";
-import { sendContextPanel } from "../skills/ipc.js";
+import { formatRelevantBlock } from "../skills/semanticMemory.js";
+import { sendContextPanel, sendActivity } from "../skills/ipc.js";
+
+// Friendlier human-readable summaries for the right-column live feed.
+// Anything not listed here falls through to a generic "Running <tool>".
+function summarizeActivity(tool: string, input: any): string {
+  const i = input || {};
+  switch (tool) {
+    case "read_pdf":         return `Reading PDF: ${(i.path || "").split("/").pop() || "(file)"}`;
+    case "open_app":         return `Opening ${i.app || i.name || "an app"}`;
+    case "open_path":        return `Opening ${i.path || "a path"}`;
+    case "list_files":       return `Browsing ${i.path || "files"}`;
+    case "search_web":       return `Searching: "${String(i.query || "").slice(0, 60)}"`;
+    case "search_maps":      return `Maps: "${String(i.query || "").slice(0, 60)}"`;
+    case "get_directions":   return `Directions to ${i.to || "a place"}`;
+    case "get_calendar":     return "Checking calendar";
+    case "get_emails":       return "Checking unread email";
+    case "get_day_plan":     return "Building today's briefing";
+    case "get_weather":      return `Weather${i.location ? `: ${i.location}` : ""}`;
+    case "save_note":        return `Saving note: "${(i.title || "").slice(0, 40)}"`;
+    case "get_notes":        return `Searching notes${i.query ? `: "${i.query}"` : ""}`;
+    case "add_task":         return `Adding task: "${(i.text || "").slice(0, 50)}"`;
+    case "get_tasks":        return "Loading tasks";
+    case "remember":         return `Remembering: ${(i.key || "").replace(/_/g, " ")}`;
+    case "recall":           return `Recalling: ${(i.key || "").replace(/_/g, " ")}`;
+    case "build_software":   return `Building: "${(i.prompt || "").slice(0, 60)}"`;
+    case "fix_self_code":    return `Fixing herself: ${(i.summary || i.description || "").slice(0, 60)}`;
+    case "repair_self":      return "Self-repair sweep";
+    case "relaunch_self":    return "Relaunching";
+    case "get_screen_context": return "Looking at your screen";
+    case "send_imessage":    return `iMessage to ${i.to || "(contact)"}`;
+    case "send_whatsapp":    return `WhatsApp to ${i.to || "(contact)"}`;
+    case "type_text":        return `Typing: "${String(i.text || "").slice(0, 40)}"`;
+    case "music_control":
+    case "music_play":       return `Music: ${i.action || i.query || "control"}`;
+    case "music_now_playing": return "Now playing?";
+    case "set_timer":        return `Timer: ${i.minutes ?? i.seconds ?? "?"}${i.minutes ? "m" : "s"}${i.label ? ` — ${i.label}` : ""}`;
+    case "set_alarm":        return `Alarm: ${i.time || "?"}`;
+    case "list_timers":      return "Listing timers";
+    case "cancel_timer":     return "Cancelling timer";
+    case "facetime":         return `FaceTime: ${i.contact || ""}`;
+    case "call_phone":       return `Call: ${i.number || ""}`;
+    case "run_shortcut":     return `Shortcut: ${i.name || ""}`;
+    case "set_volume":       return `Volume → ${i.level ?? "?"}`;
+    case "set_brightness":   return `Brightness → ${i.level ?? "?"}`;
+    case "toggle_wifi":      return "Toggling Wi-Fi";
+    case "toggle_bluetooth": return "Toggling Bluetooth";
+    case "toggle_dark_mode": return "Toggling dark mode";
+    case "lock_screen":      return "Locking screen";
+    case "sleep_mac":        return "Sleeping the Mac";
+    case "get_battery":      return "Checking battery";
+    default:                 return `Running ${tool}`;
+  }
+}
+
+async function dispatchTool(name: string, input: any) {
+  const summary = summarizeActivity(name, input);
+  sendActivity({ kind: "tool_start", tool: name, summary });
+  try {
+    const result = await handlers[name](input || {});
+    sendActivity({ kind: "tool_done", tool: name, summary });
+    return result;
+  } catch (err: any) {
+    sendActivity({
+      kind: "tool_error",
+      tool: name,
+      summary,
+      detail: err?.message || String(err),
+    });
+    throw err;
+  }
+}
 
 // Push the current open task list to the renderer so the user can see it on
 // screen whenever a task tool fires.
@@ -665,6 +737,18 @@ const TOOLS = [
     },
   },
   {
+    name: "read_pdf",
+    description: "Extract the text content of a PDF file at a given path. Use when the user asks Gwen to read, summarize, or quote from a PDF. Accepts absolute paths or tilde paths (e.g. '~/Downloads/foo.pdf'). Returns up to maxChars of text plus the page count.",
+    input_schema: {
+      type: "object",
+      properties: {
+        path:     { type: "string", description: "Path to the PDF file." },
+        maxChars: { type: "number", description: "Max characters to return. Default 20000." },
+      },
+      required: ["path"],
+    },
+  },
+  {
     name: "get_weather",
     description: "Get current weather and a short forecast. Defaults to caller's IP location if no place given.",
     input_schema: {
@@ -740,10 +824,11 @@ const handlers = {
   list_timers:        ()  => timersTool.listTimers(),
   cancel_timer:       (i) => timersTool.cancelTimer(i),
   get_weather:        (i) => weatherTool.getWeather(i),
+  read_pdf:           (i) => pdfTool.readPdf(i),
 };
 
 // ─── System prompt ───────────────────────────────────────────────────
-function buildSystemPrompt({ userName, userNickname, intentHint, ambient }) {
+function buildSystemPrompt({ userName, userNickname, intentHint, ambient, relevantBlock = "" }) {
   const date = new Date().toDateString();
   const name = userName || "Miles";
   // Spider-Verse personas: Spidey, Miles, Peter — all of them are "her"
@@ -880,6 +965,7 @@ If a tool returns an error, don't read the error verbatim. Briefly say it didn't
 work and offer the next sensible step.`;
 
   prompt += getAutoFactsBlock();
+  prompt += relevantBlock;
   prompt += formatAmbientForPrompt(ambient);
 
   if (intentHint && intentHint.confidence >= 0.7) {
@@ -900,7 +986,8 @@ export async function runBrain(userInput, opts: Record<string, any> = {}) {
   const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Miles";
   const userNickname = await safeRecall("user_nickname");
   const ambient = opts.skipAmbient ? null : await getAmbientContext().catch(() => null);
-  const system = buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint, ambient });
+  const relevantBlock = await formatRelevantBlock(userInput).catch(() => "");
+  const system = buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint, ambient, relevantBlock });
 
   const messages = [...getHistoryForTurn(), { role: "user", content: userInput }];
 
@@ -919,7 +1006,7 @@ export async function runBrain(userInput, opts: Record<string, any> = {}) {
     const toolResults = await Promise.all(
       toolUses.map(async (tu) => {
         try {
-          const result = await handlers[tu.name](tu.input || {});
+          const result = await dispatchTool(tu.name, tu.input || {});
           return {
             type: "tool_result",
             tool_use_id: tu.id,
@@ -970,7 +1057,8 @@ export async function runBrainStream(userInput, onSentence = () => {}, opts: Rec
   const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Miles";
   const userNickname = await safeRecall("user_nickname");
   const ambient = opts.skipAmbient ? null : await getAmbientContext().catch(() => null);
-  const system = buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint, ambient });
+  const relevantBlock = await formatRelevantBlock(userInput).catch(() => "");
+  const system = buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint, ambient, relevantBlock });
   const messages = [...getHistoryForTurn(), { role: "user", content: userInput }];
 
   let fullText = "";
@@ -1021,7 +1109,7 @@ export async function runBrainStream(userInput, onSentence = () => {}, opts: Rec
     const toolResults = await Promise.all(
       toolUses.map(async (tu) => {
         try {
-          const result = await handlers[tu.name](tu.input || {});
+          const result = await dispatchTool(tu.name, tu.input || {});
           return {
             type: "tool_result",
             tool_use_id: tu.id,

@@ -76,3 +76,61 @@ Format per entry:
 **Result:** ok
 **Notes:** files: src/components/GwenOrb.tsx, src/components/GwenOrb.css, src/components/Orb.tsx, src/components/Orb.css
 
+## 2026-05-07 18:31 — fix_self_code
+**Action:** Simplify and minimize the listening and speaking state animations in the UI. Reduce excessive motion and make the animations more subtle and minimal while maintaining visual feedback for state changes.
+**Result:** ok
+**Notes:** files: src/components/Avatar.vue, src/App.vue
+
+## 2026-05-07 18:34 — fix_self_code
+**Action:** Reduce speaking state animation to minimal — remove excess motion and keep it restrained and subtle, matching the listening state simplicity.
+**Result:** ok
+
+## 2026-05-07 18:51 — fix_self_code
+**Action:** Add full screen mode toggle to the UI. Add a single fullscreen button to the interface that toggles the Electron window between fullscreen and windowed mode.
+**Result:** ok
+**Notes:** files: src/main.ts, src/components/Chat.vue
+
+## 2026-05-07 19:07 — fix_self_code
+**Action:** Add code diff visualization to fix_self_code so when making UI updates, display the actual lines being changed with before/after comparison. This allows the user to see exactly what code modifications are being made during fixes.
+**Result:** ok
+**Notes:** files: src/main/index.ts, src/renderer/src/components/ChatInterface.vue
+
+## 2026-05-07 19:18 — fix_self_code
+**Action:** Add PDF reading capability. Create a new function that uses a PDF library (pdfjs-dist or similar) to extract text from PDF files. Wire it up as a new tool called read_pdf that accepts a file path and returns the extracted text content. This lets Gwen read and process PDF files independently.
+**Result:** ok
+
+## 2026-05-07 19:21 — repair_self
+**Action:** npm_install
+**Result:** ok
+**Notes:** relaunched
+
+## 2026-05-07 19:28 — build_software
+**Action:** Build a three-panel futuristic UI with Spider-Man theme and JARVIS touches. Left panel displays user tasks in a clean list format. Middle panel shows conversation history between the user and Gwen with message bubbles. Right panel streams live code changes and activities in real-time with a holographic/neon aesthetic. Use dark theme with neon accents (reds, blues, cyans), sleek typography, and futuristic design elements. Include subtle animations and a modern, tech-forward look inspired by Spider-Man's tech and JARVIS's interface style. Make it responsive and visually striking.
+**Result:** ok
+**Notes:** dir: src/components; framework: React with Tailwind CSS
+
+## 2026-05-07 19:47 — fix_self_code
+**Action:** Reduce animation complexity in the speaking/picking animation. Make it minimal and subtle instead of busy—remove excessive motion, keep only essential keyframes.
+**Result:** ok
+**Notes:** files: src/components/SpeakingAnimation.tsx, src/components/SpeakingAnimation.css
+
+## 2026-05-07 19:50 — fix_self_code
+**Action:** Remove all animation from the spider logo except a single minimal pulse effect. Strip out any rotation, scaling, glow flicker, or other movement. Keep only a steady, barely-noticeable opacity pulse.
+**Result:** ok
+**Notes:** files: src/components/TaskPanel.tsx, src/App.tsx
+
+## 2026-05-07 19:52 — fix_self_code
+**Action:** Remove the rotating animation around the logo in the speaking animation component. Keep only the subtle pulse effect, eliminate all rotation transforms.
+**Result:** ok
+**Notes:** files: src/components/SpeakingAnimation.tsx
+
+## 2026-05-07 19:53 — fix_self_code
+**Action:** Remove the rotation animation around the logo. Find the logo animation styles in the UI components and strip out any keyframe animations or transform rotations being applied to it. Make it completely static with no spinning or rotating motion.
+**Result:** ok
+**Notes:** files: src/components, src/App.tsx, src/App.css
+
+## 2026-05-07 19:58 — fix_self_code
+**Action:** Remove the red rotating animation with ticking lines around the logo. Keep only the blue pulse effect for active status. The red rotation is a separate animation layer that needs to be disabled in the logo component.
+**Result:** ok
+**Notes:** files: src/components/Logo.tsx, src/components/Logo.css
+

@@ -3,6 +3,7 @@
 // blocks the speech pipeline.
 import Anthropic from "@anthropic-ai/sdk";
 import { set, listByCategory, del } from "./sqlite.js";
+import { embedAndSave } from "./semanticMemory.js";
 
 const EXTRACTION_MODEL = process.env.GWEN_EXTRACT_MODEL || "claude-haiku-4-5-20251001";
 const AUTO_CATEGORY = "auto";
@@ -110,6 +111,7 @@ export async function extractAndSaveFacts({
         const key = fact.key.startsWith("auto_") ? fact.key : `auto_${fact.key}`;
         set(key, fact.value, AUTO_CATEGORY);
         console.log(`[passive-memory] saved ${key} (conf ${fact.confidence.toFixed(2)}): ${fact.value}`);
+        embedAndSave(key, fact.value).catch(() => {});
       }
     }
   } catch (err: any) {

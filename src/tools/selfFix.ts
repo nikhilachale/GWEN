@@ -6,10 +6,11 @@
 // All changes are made on the working tree; review with `git diff` and revert
 // with `git restore .` if the fix breaks something.
 import { spawn } from "node:child_process";
-import { sendCodeOutput, sendSelfFix } from "../skills/ipc.js";
+import { sendCodeOutput, sendSelfFix, sendCodeDiff, sendActivity } from "../skills/ipc.js";
 import { appendSelfBuild } from "../skills/buildLog.js";
 import { PROJECT_ROOT } from "../skills/projectRoot.js";
 import { relaunchApp } from "../skills/relaunch.js";
+import { parseUnifiedDiff } from "../skills/diffParse.js";
 
 export async function run({ description, files, relaunch = true } = {}) {
   if (!description || !description.trim()) {
@@ -21,6 +22,21 @@ export async function run({ description, files, relaunch = true } = {}) {
   sendSelfFix(true, "rewriting myself");
   try {
     await runClaudeCode(prompt, PROJECT_ROOT);
+    const diff = await captureGitDiff(PROJECT_ROOT);
+    if (diff) {
+      sendCodeDiff(diff);
+      // Stream one card per modified file into the right-column activity feed
+      // so Miles can see exactly which files moved and how many lines.
+      for (const f of parseUnifiedDiff(diff)) {
+        sendActivity({
+          kind: "diff",
+          summary: `${f.file}  +${f.added} −${f.removed}`,
+          detail: f.hunks,
+          added: f.added,
+          removed: f.removed,
+        });
+      }
+    }
     await appendSelfBuild({
       tool: "fix_self_code",
       action: description,
@@ -28,10 +44,11 @@ export async function run({ description, files, relaunch = true } = {}) {
       notes: Array.isArray(files) && files.length ? `files: ${files.join(", ")}` : undefined,
     });
     if (relaunch) {
-      // Delay so the spoken reply finishes before the window dies. The
-      // detached `npm run dev` will respawn the dev pipeline; conversation
-      // history persists via data/conversation.json so we resume on boot.
-      setTimeout(() => relaunchApp(), 2500);
+      // Delay so the spoken reply finishes before the window dies, and the
+      // user has a moment to see the diff. The detached `npm run dev` will
+      // respawn the dev pipeline; conversation history persists via
+      // data/conversation.json so we resume on boot.
+      setTimeout(() => relaunchApp(), diff ? 8000 : 2500);
       return "Fix applied. Restarting myself now.";
     }
     return "Fix applied. Review with git diff.";
@@ -67,6 +84,16 @@ Rules:
 - Do not run npm install, the dev server, or any tests.
 - Do not create new files unless strictly necessary.
 - When done, print one sentence describing what you changed.`;
+}
+
+function captureGitDiff(cwd) {
+  return new Promise((resolve) => {
+    const child = spawn("git", ["diff", "--no-color", "HEAD"], { cwd, env: process.env });
+    let out = "";
+    child.stdout.on("data", (d) => (out += d.toString()));
+    child.on("error", () => resolve(""));
+    child.on("exit", () => resolve(out));
+  });
 }
 
 function runClaudeCode(prompt, cwd) {

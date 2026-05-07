@@ -159,8 +159,65 @@ app.whenReady().then(async () => {
     runVoiceTurn();
   });
 
+  ipcMain.on("gwen:toggle-fullscreen", () => {
+    if (!mainWindow) return;
+    if (process.platform === "darwin") {
+      mainWindow.setSimpleFullScreen(!mainWindow.isSimpleFullScreen());
+    } else {
+      mainWindow.setFullScreen(!mainWindow.isFullScreen());
+    }
+  });
+
   // Get-state probe for renderer on mount
   ipcMain.handle("gwen:get-state", () => currentState);
+
+  // Initial-load probes for the left panel (tasks + fixes)
+  ipcMain.handle("gwen:get-tasks", async () => {
+    try {
+      const tasksMod = await import("../src/tools/tasks.js");
+      return (tasksMod.getAll() || []).filter((t) => !t.done);
+    } catch (err) {
+      console.warn("[gwen] get-tasks failed:", err.message);
+      return [];
+    }
+  });
+
+  ipcMain.handle("gwen:get-fixes", async () => {
+    try {
+      const sqlite = await import("../src/skills/sqlite.js");
+      const featureRows = sqlite.listByCategory("feature_request") as Array<{
+        key: string;
+        value: string;
+      }>;
+      const fixesRows = sqlite.listByCategory("fixes") as Array<{
+        key: string;
+        value: string;
+      }>;
+      const items: Array<{ id: string; text: string; source: string }> = [];
+
+      for (const r of featureRows) {
+        items.push({ id: `feat:${r.key}`, text: r.value, source: "feature_request" });
+      }
+      // pending_fixes_list is one row with a numbered list inside it — split.
+      for (const r of fixesRows) {
+        if (r.key === "pending_fixes_list") {
+          const parts = r.value
+            .split(/\s*\d+\.\s*/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+          for (let i = 0; i < parts.length; i++) {
+            items.push({ id: `fix:${i}`, text: parts[i], source: "fixes" });
+          }
+        } else {
+          items.push({ id: `fix:${r.key}`, text: r.value, source: "fixes" });
+        }
+      }
+      return items;
+    } catch (err) {
+      console.warn("[gwen] get-fixes failed:", err.message);
+      return [];
+    }
+  });
 
   // Reminder loop
   notify.startReminderLoop();

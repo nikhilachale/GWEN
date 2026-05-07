@@ -31,10 +31,9 @@ export default function SpectrumRing() {
     };
   }, []);
 
-  const opacity =
-    state === "speaking" || state === "listening" ? 0.9 :
-    state === "thinking" ? 0.6 :
-    0.3;
+  if (state !== "listening") return null;
+
+  const opacity = 0.9;
 
   const t = (performance.now() - tStartRef.current) / 200;
 

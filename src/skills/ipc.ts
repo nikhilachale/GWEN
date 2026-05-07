@@ -33,8 +33,28 @@ export function sendSelfFix(active, label) {
   safeSend("gwen:self-fix", { active: !!active, label: label || "" });
 }
 
+// Stream a unified diff (output of `git diff`) to the self-fix overlay so the
+// user can see the actual lines being changed before Gwen relaunches.
+export function sendCodeDiff(diff) {
+  safeSend("gwen:code-diff", String(diff || ""));
+}
+
 // Show structured tool output as a side panel (tasks, calendar, emails…).
 // Pass type=null to hide the panel.
 export function sendContextPanel(type, data) {
   safeSend("gwen:context-panel", { type, data });
+}
+
+// Live activity feed for the right column. Append-only event stream so the
+// user can see exactly what Gwen is doing right now (file reads, tool calls,
+// app launches, code edits during self-fix).
+export function sendActivity(event: {
+  kind: "tool_start" | "tool_done" | "tool_error" | "info" | "diff";
+  tool?: string;
+  summary: string;
+  detail?: string;
+  added?: number;
+  removed?: number;
+}) {
+  safeSend("gwen:activity", { ...event, ts: Date.now() });
 }

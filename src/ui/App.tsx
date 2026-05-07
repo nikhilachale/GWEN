@@ -3,9 +3,9 @@ import Orb from "./Orb";
 import Transcript from "./Transcript";
 import SelfFixOverlay from "./SelfFixOverlay";
 import HUD from "./HUD";
-import SpeedLines from "./SpeedLines";
 import SpectrumRing from "./SpectrumRing";
-import ContextPanel from "./ContextPanel";
+import LeftPanel from "./LeftPanel";
+import ActivityFeed from "./ActivityFeed";
 
 export default function App() {
   const [mounted, setMounted] = useState(false);
@@ -20,6 +20,10 @@ export default function App() {
     else console.warn("gwenBridge not available — running outside Electron?");
   };
 
+  const handleToggleFullscreen = () => {
+    if (window.gwenBridge) window.gwenBridge.toggleFullscreen();
+  };
+
   return (
     <div
       style={{
@@ -29,22 +33,43 @@ export default function App() {
         transition: "opacity 600ms ease-out, transform 600ms ease-out",
       }}
     >
+      {/* Overlays — always on top, ignore the grid */}
       <SelfFixOverlay />
       <HUD />
-      <ContextPanel />
 
-      <div style={styles.stage}>
-        <SpeedLines />
-        <SpectrumRing />
-        <div style={styles.orbWrap} onClick={handleTrigger}>
-          <Orb />
+      <button
+        type="button"
+        onClick={handleToggleFullscreen}
+        style={styles.fullscreenBtn}
+        aria-label="Toggle fullscreen"
+        title="Toggle fullscreen"
+      >
+        ⛶
+      </button>
+
+      {/* Grid layout: 1fr | 3fr | 1fr */}
+      <aside style={styles.leftCol}>
+        <LeftPanel />
+      </aside>
+
+      <main style={styles.centerCol}>
+        <div style={styles.stage}>
+          <SpectrumRing />
+          <div style={styles.orbWrap} onClick={handleTrigger}>
+            <Orb />
+          </div>
         </div>
-      </div>
 
-      <Transcript />
-      <div style={styles.footer}>
-        <span style={styles.label}>Gwen — tap orb to speak</span>
-      </div>
+        <Transcript />
+
+        <div style={styles.footer}>
+          <span style={styles.label}>Gwen — tap orb to speak</span>
+        </div>
+      </main>
+
+      <aside style={styles.rightCol}>
+        <ActivityFeed />
+      </aside>
     </div>
   );
 }
@@ -54,16 +79,36 @@ const styles: Record<string, React.CSSProperties> = {
     width: "100vw",
     height: "100vh",
     background: "transparent",
+    display: "grid",
+    gridTemplateColumns: "1fr 3fr 1fr",
+    position: "relative",
+    overflow: "hidden",
+  },
+  leftCol: {
+    minWidth: 0,
+    height: "100%",
+    overflow: "hidden",
+    zIndex: 4,
+  },
+  centerCol: {
+    minWidth: 0,
+    height: "100%",
+    position: "relative",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    position: "relative",
+  },
+  rightCol: {
+    minWidth: 0,
+    height: "100%",
+    overflow: "hidden",
+    zIndex: 4,
   },
   stage: {
     position: "relative",
-    width: 600,
-    height: 600,
+    width: "min(600px, 90%)",
+    aspectRatio: "1 / 1",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -71,8 +116,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   orbWrap: {
     position: "relative",
-    width: 360,
-    height: 360,
+    width: "60%",
+    aspectRatio: "1 / 1",
     cursor: "pointer",
     zIndex: 3,
   },
@@ -87,4 +132,22 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 5,
   },
   label: {},
+  fullscreenBtn: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    width: 32,
+    height: 32,
+    background: "rgba(0,0,0,0.4)",
+    border: "1px solid #00B4D8",
+    color: "#00B4D8",
+    fontSize: 16,
+    lineHeight: "1",
+    cursor: "pointer",
+    zIndex: 10,
+    padding: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 };

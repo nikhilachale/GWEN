@@ -13,7 +13,9 @@ declare global {
       onAudioLevel: (cb: (level: number) => void) => () => void;
       onCodeOutput: (cb: (output: unknown) => void) => () => void;
       onSelfFix: (cb: (state: { active: boolean; label: string }) => void) => () => void;
+      onCodeDiff: (cb: (diff: string) => void) => () => void;
       triggerListen: () => void;
+      toggleFullscreen: () => void;
       getState: () => Promise<string>;
     };
   }
