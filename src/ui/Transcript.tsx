@@ -8,7 +8,6 @@ const STICK_THRESHOLD = 40;
 
 export default function Transcript() {
   const [lines, setLines] = useState([]);
-  const [codeOutput, setCodeOutput] = useState("");
   const containerRef = useRef(null);
   const stickToBottomRef = useRef(true);
 
@@ -20,12 +19,8 @@ export default function Transcript() {
         return next.slice(-MAX_LINES);
       });
     });
-    const u2 = window.gwenBridge.onCodeOutput((chunk) => {
-      setCodeOutput((prev) => (prev + chunk).slice(-2000));
-    });
     return () => {
       u1 && u1();
-      u2 && u2();
     };
   }, []);
 
@@ -41,7 +36,7 @@ export default function Transcript() {
     if (stickToBottomRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [lines, codeOutput]);
+  }, [lines]);
 
   return (
     <div ref={containerRef} onScroll={handleScroll} className="gwen-transcript" style={styles.wrap}>
@@ -49,10 +44,6 @@ export default function Transcript() {
         @keyframes gwen-line-enter {
           from { transform: translateY(8px) scale(0.98); }
           to   { transform: translateY(0) scale(1); }
-        }
-        @keyframes gwen-code-enter {
-          from { opacity: 0; transform: translateY(10px); }
-          to   { opacity: 1; transform: translateY(0); }
         }
         /* Faint cyan scrollbar so it reads as part of the HUD */
         .gwen-transcript::-webkit-scrollbar { width: 6px; }
@@ -86,9 +77,6 @@ export default function Transcript() {
             </div>
           );
         })}
-        {codeOutput && (
-          <pre style={{ ...styles.code, animation: "gwen-code-enter 450ms ease-out" }}>{codeOutput}</pre>
-        )}
       </div>
     </div>
   );
@@ -114,7 +102,7 @@ const styles = {
     pointerEvents: "auto",
   },
   // Miles palette: 80% black, red bubbles for user, magenta-tinted for
-  // Gwen, cyan tint for code panel. Role labels get the chromatic offset.
+  // Gwen. Role labels get the chromatic offset.
   line: {
     fontSize: 13,
     lineHeight: 1.5,
@@ -155,20 +143,4 @@ const styles = {
     textShadow: "-1px 0 0 #E91E63, 1px 0 0 #00B4D8",
   },
   text: {},
-  code: {
-    background: "rgba(17, 17, 17, 0.85)",
-    border: "1px solid rgba(0, 180, 216, 0.45)",
-    color: "#e6f7fb",
-    padding: 12,
-    fontSize: 11,
-    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    borderRadius: 2,
-    maxHeight: 150,
-    overflow: "auto",
-    whiteSpace: "pre-wrap",
-    boxShadow: "0 0 16px rgba(0, 180, 216, 0.3), inset 0 0 12px rgba(0, 180, 216, 0.06)",
-    backdropFilter: "blur(8px)",
-    WebkitBackdropFilter: "blur(8px)",
-    textShadow: "0 0 4px rgba(0, 180, 216, 0.45)",
-  },
 };

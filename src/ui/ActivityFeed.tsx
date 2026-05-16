@@ -1,17 +1,15 @@
 // src/ui/ActivityFeed.tsx — right column (1/5 of screen).
 // Live append-only event stream so Miles can see exactly what Gwen is doing
-// right now: tool calls, file reads, app launches, code chunks during self-fix.
+// right now: tool calls, file reads, app launches.
 // Newest at top, fades older entries.
 import React, { useEffect, useRef, useState } from "react";
-import { RED, CHROMATIC_TEXT_SHADOW, CYAN, MAGENTA } from "./theme.js";
+import { RED, CHROMATIC_TEXT_SHADOW, MAGENTA } from "./theme.js";
 
 type ActivityEvent = {
-  kind: "tool_start" | "tool_done" | "tool_error" | "info" | "code" | "diff";
+  kind: "tool_start" | "tool_done" | "tool_error" | "info";
   tool?: string;
   summary: string;
   detail?: string;
-  added?: number;
-  removed?: number;
   ts: number;
 };
 
@@ -27,8 +25,6 @@ function timeOf(ts: number) {
 
 function colorFor(kind: ActivityEvent["kind"]) {
   if (kind === "tool_error") return RED;
-  if (kind === "code")       return CYAN;
-  if (kind === "diff")       return CYAN;
   if (kind === "tool_start") return MAGENTA;
   return RED;
 }
@@ -37,36 +33,7 @@ function badgeFor(kind: ActivityEvent["kind"]): string {
   if (kind === "tool_start") return "RUN";
   if (kind === "tool_done")  return "OK";
   if (kind === "tool_error") return "ERR";
-  if (kind === "code")       return "OUT";
-  if (kind === "diff")       return "DIFF";
   return "INFO";
-}
-
-function DiffLines({ text }: { text: string }) {
-  // Render unified-diff-style content with +/- color coding per line.
-  // Limited to first ~60 lines to keep the right column readable; full diff
-  // still shows in the SelfFixOverlay.
-  const all = text.split("\n");
-  const lines = all.slice(0, 60);
-  const truncated = all.length > 60;
-  return (
-    <pre style={diffStyles.pre}>
-      {lines.map((l, i) => {
-        let style: React.CSSProperties = diffStyles.ctx;
-        if (l.startsWith("+++") || l.startsWith("---") || l.startsWith("diff ")) style = diffStyles.hdr;
-        else if (l.startsWith("@@")) style = diffStyles.hunk;
-        else if (l.startsWith("+")) style = diffStyles.add;
-        else if (l.startsWith("-")) style = diffStyles.del;
-        else if (l.startsWith("index ")) style = diffStyles.hdr;
-        return (
-          <div key={i} style={style}>
-            {l || " "}
-          </div>
-        );
-      })}
-      {truncated && <div style={diffStyles.more}>… {all.length - 60} more lines (full diff in overlay)</div>}
-    </pre>
-  );
 }
 
 export default function ActivityFeed() {
@@ -81,25 +48,8 @@ export default function ActivityFeed() {
       setEvents((prev) => [e, ...prev].slice(0, MAX_EVENTS));
     });
 
-    // Stream Claude Code self-fix output through the same feed so the user
-    // sees the actual code lines flowing while she rewrites herself.
-    const u2 = bridge.onCodeOutput?.((chunk: string) => {
-      if (!chunk?.trim()) return;
-      setEvents((prev) =>
-        [
-          {
-            kind: "code" as const,
-            summary: chunk.trim().slice(0, 200),
-            ts: Date.now(),
-          },
-          ...prev,
-        ].slice(0, MAX_EVENTS)
-      );
-    });
-
     return () => {
       u1 && u1();
-      u2 && u2();
     };
   }, []);
 
@@ -145,20 +95,8 @@ export default function ActivityFeed() {
                   </span>
                   <span style={styles.eventTime}>{timeOf(e.ts)}</span>
                 </div>
-                <div style={styles.eventSummary}>
-                  {e.kind === "diff" && (e.added !== undefined || e.removed !== undefined) ? (
-                    <DiffSummary file={e.summary} added={e.added || 0} removed={e.removed || 0} />
-                  ) : (
-                    e.summary
-                  )}
-                </div>
-                {e.detail && (
-                  e.kind === "diff" ? (
-                    <DiffLines text={e.detail} />
-                  ) : (
-                    <div style={styles.eventDetail}>{e.detail}</div>
-                  )
-                )}
+                <div style={styles.eventSummary}>{e.summary}</div>
+                {e.detail && <div style={styles.eventDetail}>{e.detail}</div>}
               </div>
             );
           })
@@ -169,42 +107,6 @@ export default function ActivityFeed() {
     </div>
   );
 }
-
-function DiffSummary({ file, added, removed }: { file: string; added: number; removed: number }) {
-  return (
-    <span>
-      <span style={diffStyles.fileName}>{file.split(" ")[0]}</span>
-      {"  "}
-      <span style={diffStyles.addCount}>+{added}</span>{" "}
-      <span style={diffStyles.delCount}>−{removed}</span>
-    </span>
-  );
-}
-
-const diffStyles: Record<string, React.CSSProperties> = {
-  pre: {
-    margin: "6px 0 0",
-    padding: "6px 8px",
-    background: "rgba(0,0,0,0.45)",
-    border: "1px solid rgba(0, 180, 216, 0.25)",
-    fontSize: 10,
-    lineHeight: 1.4,
-    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    whiteSpace: "pre",
-    overflowX: "auto",
-    maxHeight: 220,
-    overflowY: "auto",
-  },
-  fileName: { color: "#9DD9FF", fontWeight: 600 },
-  addCount: { color: "#7CFFB3" },
-  delCount: { color: "#FF7B8A" },
-  add:  { color: "#7CFFB3", background: "rgba(0,255,136,0.08)" },
-  del:  { color: "#FF7B8A", background: "rgba(237,28,36,0.10)" },
-  hunk: { color: "#9DD9FF", opacity: 0.9 },
-  hdr:  { color: "#ED1C24", opacity: 0.85 },
-  ctx:  { color: "rgba(255,255,255,0.55)" },
-  more: { color: "rgba(255,255,255,0.4)", marginTop: 4, fontStyle: "italic" },
-};
 
 const styles: Record<string, React.CSSProperties> = {
   wrap: {

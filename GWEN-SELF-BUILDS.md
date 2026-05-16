@@ -95,10 +95,6 @@ Format per entry:
 **Result:** ok
 **Notes:** files: src/main/index.ts, src/renderer/src/components/ChatInterface.vue
 
-## 2026-05-07 19:18 — fix_self_code
-**Action:** Add PDF reading capability. Create a new function that uses a PDF library (pdfjs-dist or similar) to extract text from PDF files. Wire it up as a new tool called read_pdf that accepts a file path and returns the extracted text content. This lets Gwen read and process PDF files independently.
-**Result:** ok
-
 ## 2026-05-07 19:21 — repair_self
 **Action:** npm_install
 **Result:** ok
@@ -133,4 +129,20 @@ Format per entry:
 **Action:** Remove the red rotating animation with ticking lines around the logo. Keep only the blue pulse effect for active status. The red rotation is a separate animation layer that needs to be disabled in the logo component.
 **Result:** ok
 **Notes:** files: src/components/Logo.tsx, src/components/Logo.css
+
+## 2026-05-14 17:49 — fix_self_code
+**Action:** Add a read_file function that allows Gwen to read text files, TSX files, and other text-based files directly from the user's system. The function should accept a file path and return the file contents as text, similar to read_pdf but for text-based formats.
+**Result:** ok
+
+## 2026-05-16 05:08 — fix_self_code
+**Action:** Remove PDF reader from fixes file since it's already been added to the codebase.
+**Result:** ok
+
+## 2026-05-16 05:31 — fix_self_code
+**Action:** Remove PDF reader functionality, full screen mode, and live code visibility/real-time code line changes from the codebase.
+**Result:** ok
+
+## 2026-05-16 05:35 — fix_self_code
+**Action:** Restore PDF reader functionality that was removed from the codebase. Re-implement the ability to read and display PDF files.
+**Result:** ok
 

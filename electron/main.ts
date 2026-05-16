@@ -1,5 +1,5 @@
 // electron/main.js — main process, voice state machine, IPC hub
-import { app, BrowserWindow, ipcMain, shell, globalShortcut } from "electron";
+import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import dotenv from "dotenv";
@@ -40,11 +40,6 @@ async function loadCore() {
 // ─── Window ───────────────────────────────────────────────────────────
 function createWindow() {
   mainWindow = new BrowserWindow({
-    // macOS: simpleFullscreen avoids the separate-space treatment of native
-    // fullscreen (which fights transparency). On other platforms, fall back
-    // to regular fullscreen.
-    simpleFullscreen: process.platform === "darwin",
-    fullscreen: process.platform !== "darwin",
     backgroundColor: "#00000000",
     transparent: true,
     frame: false,
@@ -71,23 +66,6 @@ function createWindow() {
     mainWindow = null;
     global.mainWindow = null;
   });
-
-  // Esc exits fullscreen only — never quits. Use Cmd+Q to quit.
-  // Registered only while focused so we don't steal Esc from other apps.
-  const registerEsc = () => {
-    globalShortcut.register("Escape", () => {
-      if (!mainWindow) return;
-      if (process.platform === "darwin") {
-        if (mainWindow.isSimpleFullScreen()) mainWindow.setSimpleFullScreen(false);
-      } else if (mainWindow.isFullScreen()) {
-        mainWindow.setFullScreen(false);
-      }
-    });
-  };
-  const unregisterEsc = () => globalShortcut.unregister("Escape");
-  mainWindow.on("focus", registerEsc);
-  mainWindow.on("blur", unregisterEsc);
-  if (mainWindow.isFocused()) registerEsc();
 
   // External links open in default browser, not in the app
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -157,15 +135,6 @@ app.whenReady().then(async () => {
   // Manual trigger from renderer (clicking the orb / mic button)
   ipcMain.on("gwen:trigger", () => {
     runVoiceTurn();
-  });
-
-  ipcMain.on("gwen:toggle-fullscreen", () => {
-    if (!mainWindow) return;
-    if (process.platform === "darwin") {
-      mainWindow.setSimpleFullScreen(!mainWindow.isSimpleFullScreen());
-    } else {
-      mainWindow.setFullScreen(!mainWindow.isFullScreen());
-    }
   });
 
   // Get-state probe for renderer on mount
@@ -360,10 +329,6 @@ app.whenReady().then(async () => {
   // Wait for all queued sentences to finish playing before flipping idle.
   await Promise.all(speakPromises);
   setState("idle");
-});
-
-app.on("will-quit", () => {
-  globalShortcut.unregisterAll();
 });
 
 app.on("window-all-closed", () => {
