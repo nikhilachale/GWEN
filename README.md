@@ -1,7 +1,15 @@
-# Gwen personal  AI Assistant
+# Gwen — Personal AI Assistant
 
 Voice-first, always-on AI desktop assistant. Claude does the thinking;
 ElevenLabs does the talking; macOS does the work.
+
+## Demo
+
+https://github.com/nikhilachale/GWEN/raw/main/public/demo.mp4
+
+<video src="public/demo.mp4" controls width="320" muted playsinline></video>
+
+> ▶︎ [`public/demo.mp4`](./public/demo.mp4) — 100 s walkthrough: wake word, the audio-reactive orb, and live tool calls.
 
 > See [`CLAUDE.md`](./CLAUDE.md), [`agents/AGENTS.md`](./agents/AGENTS.md), and [`agents/SKILLS.md`](./agents/SKILLS.md) for full architecture.
 

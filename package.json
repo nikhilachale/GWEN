@@ -2,6 +2,8 @@
   "name": "gwen",
   "version": "0.1.0",
   "description": "JARVIS-style voice-first AI assistant",
+  "license": "MIT",
+  "author": "Nikhil Achale",
   "type": "module",
   "main": "dist-electron/electron/main.js",
   "scripts": {
