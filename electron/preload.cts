@@ -19,20 +19,10 @@ contextBridge.exposeInMainWorld("gwenBridge", {
     ipcRenderer.on("gwen:audio-level", handler);
     return () => ipcRenderer.removeListener("gwen:audio-level", handler);
   },
-  onCodeOutput: (cb) => {
-    const handler = (_, v) => cb(v);
-    ipcRenderer.on("gwen:code-output", handler);
-    return () => ipcRenderer.removeListener("gwen:code-output", handler);
-  },
   onSelfFix: (cb) => {
     const handler = (_, v) => cb(v);
     ipcRenderer.on("gwen:self-fix", handler);
     return () => ipcRenderer.removeListener("gwen:self-fix", handler);
-  },
-  onCodeDiff: (cb) => {
-    const handler = (_, v) => cb(v);
-    ipcRenderer.on("gwen:code-diff", handler);
-    return () => ipcRenderer.removeListener("gwen:code-diff", handler);
   },
   onContextPanel: (cb) => {
     const handler = (_, v) => cb(v);
@@ -44,10 +34,24 @@ contextBridge.exposeInMainWorld("gwenBridge", {
     ipcRenderer.on("gwen:activity", handler);
     return () => ipcRenderer.removeListener("gwen:activity", handler);
   },
+  onCodeOutput: (cb) => {
+    const handler = (_, v) => cb(v);
+    ipcRenderer.on("gwen:code-output", handler);
+    return () => ipcRenderer.removeListener("gwen:code-output", handler);
+  },
+  onCodeDiff: (cb) => {
+    const handler = (_, v) => cb(v);
+    ipcRenderer.on("gwen:code-diff", handler);
+    return () => ipcRenderer.removeListener("gwen:code-diff", handler);
+  },
+  onDoc: (cb) => {
+    const handler = (_, v) => cb(v);
+    ipcRenderer.on("gwen:doc", handler);
+    return () => ipcRenderer.removeListener("gwen:doc", handler);
+  },
 
   // outgoing
   triggerListen: () => ipcRenderer.send("gwen:trigger", "listen"),
-  toggleFullscreen: () => ipcRenderer.send("gwen:toggle-fullscreen"),
   getState: () => ipcRenderer.invoke("gwen:get-state"),
   getFixes: () => ipcRenderer.invoke("gwen:get-fixes"),
   getTasks: () => ipcRenderer.invoke("gwen:get-tasks"),

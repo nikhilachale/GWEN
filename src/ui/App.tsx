@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Orb from "./Orb";
 import Transcript from "./Transcript";
-import SelfFixOverlay from "./SelfFixOverlay";
+import Stage from "./Stage";
 import HUD from "./HUD";
 import SpectrumRing from "./SpectrumRing";
 import LeftPanel from "./LeftPanel";
@@ -20,10 +20,6 @@ export default function App() {
     else console.warn("gwenBridge not available — running outside Electron?");
   };
 
-  const handleToggleFullscreen = () => {
-    if (window.gwenBridge) window.gwenBridge.toggleFullscreen();
-  };
-
   return (
     <div
       style={{
@@ -33,19 +29,11 @@ export default function App() {
         transition: "opacity 600ms ease-out, transform 600ms ease-out",
       }}
     >
-      {/* Overlays — always on top, ignore the grid */}
-      <SelfFixOverlay />
+      {/* Center focus stage — takes over when Gwen is doing something
+          (code edits, reading a PDF, running a tool); idle = renders
+          nothing so the normal Orb + Transcript show. */}
+      <Stage />
       <HUD />
-
-      <button
-        type="button"
-        onClick={handleToggleFullscreen}
-        style={styles.fullscreenBtn}
-        aria-label="Toggle fullscreen"
-        title="Toggle fullscreen"
-      >
-        ⛶
-      </button>
 
       {/* Grid layout: 1fr | 3fr | 1fr */}
       <aside style={styles.leftCol}>
@@ -132,22 +120,4 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 5,
   },
   label: {},
-  fullscreenBtn: {
-    position: "absolute",
-    top: 16,
-    right: 16,
-    width: 32,
-    height: 32,
-    background: "rgba(0,0,0,0.4)",
-    border: "1px solid #00B4D8",
-    color: "#00B4D8",
-    fontSize: 16,
-    lineHeight: "1",
-    cursor: "pointer",
-    zIndex: 10,
-    padding: 0,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
 };

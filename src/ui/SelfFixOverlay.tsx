@@ -1,36 +1,62 @@
-// src/ui/SelfFixOverlay.tsx — animated banner shown while Gwen modifies her
-// own code (fix_self_code) or rebuilds herself (repair_self).
-import React, { useEffect, useState } from "react";
+// src/ui/SelfFixOverlay.tsx — shown while Gwen modifies her own code
+// (fix_self_code) or rebuilds herself (repair_self). Renders the live
+// Claude Code stdout stream and, once the fix lands, the unified git diff
+// so Miles can watch exactly what changed before the relaunch.
+import React, { useEffect, useRef, useState } from "react";
 
 export default function SelfFixOverlay() {
   const [active, setActive] = useState(false);
   const [label, setLabel] = useState("");
+  const [output, setOutput] = useState("");
   const [diff, setDiff] = useState("");
+  const streamRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!window.gwenBridge) return;
-    const offFix = window.gwenBridge.onSelfFix(({ active, label }) => {
+    const bridge = window.gwenBridge;
+    if (!bridge) return;
+
+    const offFix = bridge.onSelfFix(({ active, label }) => {
+      if (active) {
+        // New run — clear the previous transcript/diff.
+        setOutput("");
+        setDiff("");
+      }
       setActive(active);
       if (label) setLabel(label);
-      if (active) setDiff("");
     });
-    const offDiff = window.gwenBridge.onCodeDiff?.((d) => setDiff(d));
+    const offOut = bridge.onCodeOutput?.((chunk) => {
+      setOutput((prev) => (prev + chunk).slice(-20000));
+    });
+    const offDiff = bridge.onCodeDiff?.((d) => setDiff(d));
+
     return () => {
       offFix && offFix();
+      offOut && offOut();
       offDiff && offDiff();
     };
   }, []);
 
-  if (!active && !diff) return null;
+  // Auto-scroll the live stream to the newest output.
+  useEffect(() => {
+    const el = streamRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [output]);
+
+  // selfFix.ts fires sendSelfFix(false) the instant the fix returns — ~8s
+  // before the relaunch. Keep the panel up as long as there's a diff or
+  // streamed output so Miles actually sees the change in that window.
+  const visible = active || !!output || !!diff;
+  if (!visible) return null;
 
   return (
     <>
       <style>{KEYFRAMES}</style>
-      <div style={styles.banner}>
+      <div style={styles.panel}>
         <div style={styles.scanline} />
+
         <div style={styles.row}>
           <span style={styles.dot} />
-          <span style={styles.label}>{active ? (label || "rewriting myself") : "fix applied"}</span>
+          <span style={styles.label}>{label || "rewriting myself"}</span>
           {active && (
             <span style={styles.dots}>
               <span style={{ ...styles.tick, animationDelay: "0s" }}>.</span>
@@ -39,7 +65,15 @@ export default function SelfFixOverlay() {
             </span>
           )}
         </div>
-        {diff && <DiffView diff={diff} />}
+
+        {diff ? (
+          <DiffView diff={diff} />
+        ) : output ? (
+          <div ref={streamRef} className="gwen-fix-stream" style={styles.stream}>
+            {output}
+          </div>
+        ) : null}
+
         <div style={styles.borderTop} />
         <div style={styles.borderBottom} />
       </div>
@@ -50,7 +84,7 @@ export default function SelfFixOverlay() {
 function DiffView({ diff }: { diff: string }) {
   const lines = diff.split("\n");
   return (
-    <div style={styles.diffBox}>
+    <div className="gwen-fix-stream" style={styles.diffBox}>
       {lines.map((line, i) => {
         let style: React.CSSProperties = styles.diffCtx;
         if (line.startsWith("+++") || line.startsWith("---")) style = styles.diffHdr;
@@ -60,7 +94,7 @@ function DiffView({ diff }: { diff: string }) {
         else if (line.startsWith("-")) style = styles.diffDel;
         return (
           <div key={i} style={style}>
-            {line || " "}
+            {line || " "}
           </div>
         );
       })}
@@ -86,27 +120,33 @@ const KEYFRAMES = `
   93%      { opacity: 0.4; }
   96%      { opacity: 1; }
 }
+.gwen-fix-stream::-webkit-scrollbar { width: 6px; }
+.gwen-fix-stream::-webkit-scrollbar-track { background: rgba(237, 28, 36, 0.05); }
+.gwen-fix-stream::-webkit-scrollbar-thumb { background: rgba(237, 28, 36, 0.4); border-radius: 3px; }
 `;
 
+const MONO = "'JetBrains Mono', ui-monospace, 'SF Mono', monospace";
+
 const styles: Record<string, React.CSSProperties> = {
-  banner: {
+  panel: {
     position: "absolute",
     top: "50%",
     left: "50%",
     transform: "translate(-50%, -50%)",
-    padding: "14px 28px",
+    width: "min(900px, 72vw)",
+    maxHeight: "70vh",
+    display: "flex",
+    flexDirection: "column",
+    padding: "14px 20px",
     background:
-      "linear-gradient(90deg, rgba(17,17,17,0.95) 0%, rgba(50,8,12,0.95) 50%, rgba(17,17,17,0.95) 100%)",
+      "linear-gradient(180deg, rgba(17,17,17,0.96) 0%, rgba(38,8,10,0.96) 100%)",
     border: "1px solid rgba(237, 28, 36, 0.5)",
     borderRadius: 4,
     color: "#ED1C24",
-    fontFamily: "ui-monospace, 'SF Mono', monospace",
-    fontSize: 12,
-    letterSpacing: "0.3em",
-    textTransform: "uppercase",
+    fontFamily: MONO,
     overflow: "hidden",
     zIndex: 100,
-    pointerEvents: "none",
+    pointerEvents: "auto",
     backdropFilter: "blur(6px)",
     animation: "gwen-border-flicker 3s ease-in-out infinite",
   },
@@ -117,6 +157,10 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
     position: "relative",
     zIndex: 2,
+    fontSize: 12,
+    letterSpacing: "0.3em",
+    textTransform: "uppercase",
+    flex: "0 0 auto",
   },
   dot: {
     width: 8,
@@ -127,19 +171,40 @@ const styles: Record<string, React.CSSProperties> = {
   },
   label: {
     color: "#ED1C24",
-    // Chromatic-offset print look + red glow halo
     textShadow:
       "-1.5px 0 0 #E91E63, 1.5px 0 0 #00B4D8, 0 0 8px rgba(237, 28, 36, 0.7)",
   },
-  dots: {
-    display: "inline-flex",
-    width: 18,
-    fontSize: 14,
-    letterSpacing: 1,
+  dots: { display: "inline-flex", width: 18, fontSize: 14, letterSpacing: 1 },
+  tick: { animation: "gwen-tick 1.2s ease-in-out infinite" },
+  stream: {
+    marginTop: 12,
+    overflowY: "auto",
+    flex: "1 1 auto",
+    fontSize: 11,
+    lineHeight: 1.5,
+    color: "rgba(255,255,255,0.8)",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    fontFamily: MONO,
+    textTransform: "none",
+    letterSpacing: 0,
   },
-  tick: {
-    animation: "gwen-tick 1.2s ease-in-out infinite",
+  diffBox: {
+    marginTop: 12,
+    overflowY: "auto",
+    flex: "1 1 auto",
+    fontSize: 11,
+    lineHeight: 1.45,
+    fontFamily: MONO,
+    textTransform: "none",
+    letterSpacing: 0,
+    whiteSpace: "pre",
   },
+  diffHdr: { color: "rgba(255,255,255,0.55)" },
+  diffHunk: { color: "#00B4D8" },
+  diffAdd: { color: "#3ddc84", background: "rgba(61,220,132,0.08)" },
+  diffDel: { color: "#ED1C24", background: "rgba(237,28,36,0.08)" },
+  diffCtx: { color: "rgba(255,255,255,0.65)" },
   scanline: {
     position: "absolute",
     top: 0,
@@ -147,7 +212,7 @@ const styles: Record<string, React.CSSProperties> = {
     left: 0,
     width: "30%",
     background:
-      "linear-gradient(90deg, transparent 0%, rgba(237, 28, 36, 0.25) 50%, transparent 100%)",
+      "linear-gradient(90deg, transparent 0%, rgba(237, 28, 36, 0.18) 50%, transparent 100%)",
     animation: "gwen-scan 2.4s linear infinite",
     pointerEvents: "none",
     zIndex: 1,
@@ -171,43 +236,5 @@ const styles: Record<string, React.CSSProperties> = {
     background:
       "linear-gradient(90deg, transparent 0%, #ED1C24 50%, transparent 100%)",
     boxShadow: "0 0 8px #ED1C24",
-  },
-  diffBox: {
-    marginTop: 12,
-    maxHeight: "60vh",
-    maxWidth: "min(900px, 80vw)",
-    overflow: "auto",
-    fontFamily: "ui-monospace, 'SF Mono', monospace",
-    fontSize: 11,
-    letterSpacing: 0,
-    textTransform: "none",
-    lineHeight: 1.45,
-    background: "rgba(0,0,0,0.55)",
-    border: "1px solid rgba(237, 28, 36, 0.25)",
-    borderRadius: 3,
-    padding: "8px 10px",
-    position: "relative",
-    zIndex: 2,
-    whiteSpace: "pre",
-    pointerEvents: "auto",
-  },
-  diffAdd: {
-    color: "#7CFFB3",
-    background: "rgba(0, 255, 136, 0.08)",
-  },
-  diffDel: {
-    color: "#FF7B8A",
-    background: "rgba(237, 28, 36, 0.10)",
-  },
-  diffHunk: {
-    color: "#9DD9FF",
-    opacity: 0.9,
-  },
-  diffHdr: {
-    color: "#ED1C24",
-    opacity: 0.85,
-  },
-  diffCtx: {
-    color: "rgba(255,255,255,0.55)",
   },
 };

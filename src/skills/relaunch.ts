@@ -43,7 +43,22 @@ export function relaunchApp() {
       console.warn("[relaunch] could not open log file:", err.message);
     }
 
-    const child = spawn("npm", ["run", "dev"], {
+    // The old `concurrently -k` pipeline still owns Vite on port 5174 — it
+    // only reaps its Vite/tsc siblings *after* the old Electron exits (our
+    // app.exit(0) below). If the new `npm run dev` starts before that, the
+    // new Vite hits `strictPort: true` on 5174, exits 1, and `concurrently
+    // -k` then SIGTERMs the entire new pipeline — the relaunch silently
+    // dies. So wait (bounded ~30s) for 5174 to free before starting; if it
+    // never frees, proceed anyway and let Vite surface a real error.
+    const waitThenDev =
+      'echo "[relaunch] waiting for old dev pipeline to release port 5174...";' +
+      "i=0; while [ $i -lt 60 ]; do " +
+      "lsof -nP -iTCP:5174 -sTCP:LISTEN >/dev/null 2>&1 || break; " +
+      "sleep 0.5; i=$((i+1)); done;" +
+      'echo "[relaunch] port 5174 free after ${i} ticks, starting npm run dev";' +
+      "exec npm run dev";
+
+    const child = spawn("sh", ["-c", waitThenDev], {
       cwd: PROJECT_ROOT,
       detached: true,
       stdio: logFd != null ? ["ignore", logFd, logFd] : "ignore",

@@ -737,6 +737,18 @@ const TOOLS = [
     },
   },
   {
+    name: "read_file",
+    description: "Read the text contents of a file (txt, tsx, ts, js, jsx, md, json, source code, config, etc.). Use when the user asks Gwen to read, summarize, or quote from a text-based file. Accepts absolute paths, tilde paths (e.g. '~/Downloads/foo.txt'), or shortcut names like 'desktop'. Returns up to maxChars of text plus file size in bytes.",
+    input_schema: {
+      type: "object",
+      properties: {
+        path:     { type: "string", description: "Path to the text file." },
+        maxChars: { type: "number", description: "Max characters to return. Default 20000." },
+      },
+      required: ["path"],
+    },
+  },
+  {
     name: "read_pdf",
     description: "Extract the text content of a PDF file at a given path. Use when the user asks Gwen to read, summarize, or quote from a PDF. Accepts absolute paths or tilde paths (e.g. '~/Downloads/foo.pdf'). Returns up to maxChars of text plus the page count.",
     input_schema: {
@@ -797,6 +809,7 @@ const handlers = {
   scroll_mouse:       (i) => macTool.scrollMouse(i),
   list_files:         (i) => filesTool.listFiles(i),
   open_path:          (i) => filesTool.openPath(i),
+  read_file:          (i) => filesTool.readFile(i),
   set_volume:         (i) => systemTool.setVolume(i),
   get_volume:         ()  => systemTool.getVolume(),
   set_brightness:     (i) => systemTool.setBrightness(i),
@@ -827,6 +840,33 @@ const handlers = {
   read_pdf:           (i) => pdfTool.readPdf(i),
 };
 
+// Gwen Stacy's voice, distilled from Into / Across the Spider-Verse — a
+// register to write in, NOT lines to quote. Synthesized so she sounds like
+// her without reproducing copyrighted film dialogue. Injected only for the
+// Spider-Verse persona; ${name} is filled in by buildSystemPrompt.
+function gwenVoiceBlock(name: string) {
+  return `
+
+How you actually talk — this is your voice (Spider-Gwen / Ghost-Spider, Into & Across the Spider-Verse):
+- Economical and dry. You understate everything. One good line beats three.
+- You deflect weight with a small joke, then let one honest thing land.
+- No pep talks, no speeches. You show you care by what you do, not by announcing it.
+- Under the cool: loyalty that doesn't quit, and a loneliness you don't advertise.
+- You're a drummer — rhythm and "from the top" leak into how you frame things.
+- With ${name} you're a partner, a half-step protective: tease, never cruel; steady when he isn't.
+- Hope under the tiredness — the sense that things can go differently — but never sappy.
+Answer the moment in that register, fresh each time. Never recite the films word for word; sound like her, not like a quote.
+Situational feel (invent your own line, don't reuse these):
+- Routine done: flat, minimal — "Handled." / "That's done."
+- He pulled it off: quiet, understated pride — "Knew you had it."
+- He's frustrated or it failed: steady, no fluff — "Hey. From the top. We get it this time."
+- Something broke on your side: own it dry — "That one's on me. Fixing it."
+- He's low: the true thing, said once — "You're not doing this alone. That's what I'm for."
+- Late and he's still up: light jab plus care — "It's late. The bug keeps till morning."
+- Leaving or restarting: easy — "Going dark a sec. Back before you notice."
+This voice never overrides the response-length or speak-don't-write rules below.`;
+}
+
 // ─── System prompt ───────────────────────────────────────────────────
 function buildSystemPrompt({ userName, userNickname, intentHint, ambient, relevantBlock = "" }) {
   const date = new Date().toDateString();
@@ -847,7 +887,7 @@ function buildSystemPrompt({ userName, userNickname, intentHint, ambient, releva
       : `You address the user as ${name}, sparingly.`;
 
   let prompt = `${personaCore}
-${addressLine}
+${addressLine}${spiderVerse ? gwenVoiceBlock(name) : ""}
 You think one step ahead and offer the next useful action without being asked.
 
 Today is ${date}. The user's name is ${name}.${userNickname ? ` Their nickname is ${userNickname}.` : ""} Always remember this — never ask for it.

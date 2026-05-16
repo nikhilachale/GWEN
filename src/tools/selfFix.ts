@@ -1,16 +1,15 @@
 // src/tools/selfFix.js — let Gwen fix her own code via Claude Code CLI.
 // Spawns `claude --print` in this repo's root so the model edits Gwen's source
-// directly. Output streams to the UI via gwen:code-output.
+// directly.
 //
 // Safety: brain.ts is instructed to confirm with the user before invoking this.
 // All changes are made on the working tree; review with `git diff` and revert
 // with `git restore .` if the fix breaks something.
 import { spawn } from "node:child_process";
-import { sendCodeOutput, sendSelfFix, sendCodeDiff, sendActivity } from "../skills/ipc.js";
+import { sendSelfFix, sendCodeOutput, sendCodeDiff } from "../skills/ipc.js";
 import { appendSelfBuild } from "../skills/buildLog.js";
 import { PROJECT_ROOT } from "../skills/projectRoot.js";
 import { relaunchApp } from "../skills/relaunch.js";
-import { parseUnifiedDiff } from "../skills/diffParse.js";
 
 export async function run({ description, files, relaunch = true } = {}) {
   if (!description || !description.trim()) {
@@ -23,20 +22,7 @@ export async function run({ description, files, relaunch = true } = {}) {
   try {
     await runClaudeCode(prompt, PROJECT_ROOT);
     const diff = await captureGitDiff(PROJECT_ROOT);
-    if (diff) {
-      sendCodeDiff(diff);
-      // Stream one card per modified file into the right-column activity feed
-      // so Miles can see exactly which files moved and how many lines.
-      for (const f of parseUnifiedDiff(diff)) {
-        sendActivity({
-          kind: "diff",
-          summary: `${f.file}  +${f.added} −${f.removed}`,
-          detail: f.hunks,
-          added: f.added,
-          removed: f.removed,
-        });
-      }
-    }
+    if (diff) sendCodeDiff(diff);
     await appendSelfBuild({
       tool: "fix_self_code",
       action: description,

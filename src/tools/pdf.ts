@@ -2,6 +2,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { sendDoc } from "../skills/ipc.js";
 
 function resolvePath(input: string) {
   if (input.startsWith("~")) {
@@ -36,10 +37,13 @@ export async function readPdf({ path: target, maxChars = 20000 }: { path?: strin
 
     const trimmed = text.trim();
     if (!trimmed) return `No extractable text in ${path.basename(filePath)} (may be a scanned PDF).`;
+    const out = trimmed.slice(0, maxChars);
+    // Put the text on the center stage so Miles can read it while Gwen talks.
+    sendDoc({ title: path.basename(filePath), text: out, pages: doc.numPages });
     return {
       path: filePath,
       pages: doc.numPages,
-      text: trimmed.slice(0, maxChars),
+      text: out,
       truncated: trimmed.length > maxChars,
     };
   } catch (err: any) {

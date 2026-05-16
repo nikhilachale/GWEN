@@ -23,20 +23,29 @@ export function sendAudioLevel(level) {
   safeSend("gwen:audio-level", Math.max(0, Math.min(1, level)));
 }
 
-export function sendCodeOutput(chunk) {
+// Live stdout/stderr stream from Claude Code while Gwen rewrites or rebuilds
+// herself (fix_self_code / build_software / repair_self). The SelfFixOverlay
+// renders this so Miles can watch the edits happen in real time.
+export function sendCodeOutput(chunk: string) {
   safeSend("gwen:code-output", chunk);
+}
+
+// The full unified `git diff HEAD` captured after a self-fix completes, so
+// the overlay can show exactly which lines changed before the relaunch.
+export function sendCodeDiff(diff: string) {
+  safeSend("gwen:code-diff", diff);
+}
+
+// Document text Gwen just read (PDF, file) — the renderer puts this on the
+// center stage so Miles can read it while she talks about it.
+export function sendDoc(doc: { title: string; text: string; pages?: number }) {
+  safeSend("gwen:doc", doc);
 }
 
 // Lifecycle signal for the self-fix UI overlay.
 // active=true → show the "rewriting myself" banner; false → hide.
 export function sendSelfFix(active, label) {
   safeSend("gwen:self-fix", { active: !!active, label: label || "" });
-}
-
-// Stream a unified diff (output of `git diff`) to the self-fix overlay so the
-// user can see the actual lines being changed before Gwen relaunches.
-export function sendCodeDiff(diff) {
-  safeSend("gwen:code-diff", String(diff || ""));
 }
 
 // Show structured tool output as a side panel (tasks, calendar, emails…).
@@ -47,14 +56,12 @@ export function sendContextPanel(type, data) {
 
 // Live activity feed for the right column. Append-only event stream so the
 // user can see exactly what Gwen is doing right now (file reads, tool calls,
-// app launches, code edits during self-fix).
+// app launches).
 export function sendActivity(event: {
-  kind: "tool_start" | "tool_done" | "tool_error" | "info" | "diff";
+  kind: "tool_start" | "tool_done" | "tool_error" | "info";
   tool?: string;
   summary: string;
   detail?: string;
-  added?: number;
-  removed?: number;
 }) {
   safeSend("gwen:activity", { ...event, ts: Date.now() });
 }
