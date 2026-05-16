@@ -1,6 +1,7 @@
 node_modules/
 dist/
 dist-electron/
+dist-test/
 release/
 .env
 .env.local
@@ -19,6 +20,8 @@ data/.gwen-memory.db-shm
 data/conversation.json
 data/notes/*.md
 data/tasks.json
+data/.self-restart
+data/relaunch.pid
 
 # Editor
 .vscode/

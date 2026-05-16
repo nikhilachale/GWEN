@@ -52,10 +52,10 @@ export default function Orb() {
   // speaking, slower at idle.
   const speed =
     state === "thinking" ? 1.6 :
-    state === "speaking" ? 1.1 :
-    state === "listening" ? 0.9 :
+    state === "speaking" ? 2.4 :
+    state === "listening" ? 2.2 :
     2.6;
-  const reactiveScale = 1 + audioLevel * 0.14;
+  const reactiveScale = 1 + audioLevel * 0.05;
 
   const ringRadii = [22, 38, 54, 70, 86].slice(0, RING_COUNT);
 
@@ -76,12 +76,20 @@ export default function Orb() {
           100% { transform: translate(-50%, -50%) scale(1.25); opacity: 0; stroke-opacity: 0; }
         }
         @keyframes gwen-spider-pulse {
-          0%, 100% { filter: drop-shadow(0 0 4px ${RED}) drop-shadow(0 0 10px ${RED_DEEP}); }
-          50%      { filter: drop-shadow(-1.5px 0 0 ${MAGENTA}) drop-shadow(1.5px 0 0 ${CYAN}) drop-shadow(0 0 12px ${RED}); }
+          0%, 100% { opacity: 0.92; }
+          50%      { opacity: 1; }
         }
-        @keyframes gwen-spider-rotate {
-          from { transform: translate(-50%, -50%) scale(var(--reactive-scale)) rotate(0deg); }
-          to   { transform: translate(-50%, -50%) scale(var(--reactive-scale)) rotate(360deg); }
+        @keyframes gwen-orb-float {
+          0%, 100% { transform: translateY(0); }
+          50%      { transform: translateY(-6px); }
+        }
+        @keyframes gwen-listen-ripple {
+          0%   { transform: translate(-50%, -50%) scale(0.85); opacity: 0.5; }
+          100% { transform: translate(-50%, -50%) scale(1.25); opacity: 0; }
+        }
+        @keyframes gwen-listen-bounce {
+          0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
+          40%           { transform: translateY(-3px); opacity: 0.9; }
         }
       `}</style>
 
@@ -100,7 +108,10 @@ export default function Orb() {
           stroke="url(#web-fade)"
           strokeWidth="1.1"
           strokeLinecap="round"
-          style={{ filter: `drop-shadow(0 0 3px ${stateColor})` }}
+          style={{
+            filter: `drop-shadow(0 0 3px ${stateColor})`,
+            transition: "filter 350ms ease-out",
+          }}
         >
           {Array.from({ length: SPOKE_COUNT }).map((_, i) => {
             const angle = (i / SPOKE_COUNT) * 360;
@@ -117,6 +128,7 @@ export default function Orb() {
           style={{
             filter: `drop-shadow(0 0 4px ${stateColor})`,
             animation: `gwen-pulse-glow ${speed}s ease-in-out infinite`,
+            transition: "filter 350ms ease-out",
           }}
         >
           {ringRadii.map((r, i) => (
@@ -131,7 +143,7 @@ export default function Orb() {
       </svg>
 
       {/* Two pulse rings traveling outward — energy in the web threads */}
-      {[0, 1].map((i) => (
+      {state !== "listening" && state !== "speaking" && [0, 1].map((i) => (
         <svg
           key={`pulse-${i}`}
           viewBox="0 0 200 200"
@@ -151,18 +163,48 @@ export default function Orb() {
         </svg>
       ))}
 
-      {/* Soft core glow behind the spider — blends state color with red */}
-      <div style={{ ...styles.coreGlow, background: `radial-gradient(circle, ${stateColor}55 0%, ${SPIDEY_RED}33 40%, transparent 70%)` }} />
+      {/* Listening: single soft ripple + 3 gently bouncing dots */}
+      {state === "listening" && (
+        <>
+          <div
+            style={{
+              ...styles.ripple,
+              borderColor: stateColor,
+              boxShadow: `0 0 6px ${stateColor}`,
+              animation: `gwen-listen-ripple 2.6s ease-out infinite`,
+            }}
+          />
+          <div style={styles.dots}>
+            {[0, 1, 2].map((i) => (
+              <span
+                key={`dot-${i}`}
+                style={{
+                  ...styles.dot,
+                  background: stateColor,
+                  boxShadow: `0 0 4px ${stateColor}`,
+                  animation: `gwen-listen-bounce 1.6s ease-in-out ${i * 0.2}s infinite`,
+                }}
+              />
+            ))}
+          </div>
+        </>
+      )}
 
-      {/* Spider symbol — kept upright; reacts to audio */}
+      {/* Soft core glow behind the spider — blends state color with red */}
+      <div
+        style={{
+          ...styles.coreGlow,
+          background: `radial-gradient(circle, ${stateColor}55 0%, ${SPIDEY_RED}33 40%, transparent 70%)`,
+          transition: "background 350ms ease-out",
+        }}
+      />
+
+      {/* Spider symbol — kept upright */}
       <img
         src="/bg.png"
         alt=""
         draggable={false}
-        style={{
-          ...styles.spider,
-          ["--reactive-scale" as any]: reactiveScale,
-        }}
+        style={styles.spider}
       />
     </div>
   );
@@ -175,6 +217,7 @@ const styles: Record<string, React.CSSProperties> = {
     position: "relative",
     overflow: "visible",
     background: "transparent",
+    animation: "gwen-orb-float 6s ease-in-out infinite",
   },
   web: {
     position: "absolute",
@@ -207,6 +250,32 @@ const styles: Record<string, React.CSSProperties> = {
     filter: "blur(14px)",
     pointerEvents: "none",
   },
+  ripple: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    width: "55%",
+    height: "55%",
+    borderRadius: "50%",
+    border: "2px solid",
+    pointerEvents: "none",
+  },
+  dots: {
+    position: "absolute",
+    top: "calc(50% + 80px)",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    display: "flex",
+    gap: "10px",
+    pointerEvents: "none",
+    zIndex: 2,
+  },
+  dot: {
+    width: "10px",
+    height: "10px",
+    borderRadius: "50%",
+    display: "inline-block",
+  },
   spider: {
     position: "absolute",
     top: "50%",
@@ -217,8 +286,8 @@ const styles: Record<string, React.CSSProperties> = {
     width: "auto",
     pointerEvents: "none",
     transformOrigin: "center",
-    transform: "translate(-50%, -50%) scale(var(--reactive-scale, 1))",
-    animation: "gwen-spider-pulse 2.4s ease-in-out infinite",
+    transform: "translate(-50%, -50%)",
+    animation: "gwen-spider-pulse 3.2s ease-in-out infinite",
     // Drop the white background of the PNG so it sits cleanly on dark UI.
     // mix-blend-mode lighten + screen would also work; this assumes the
     // PNG has transparent or near-white background — if you see a white

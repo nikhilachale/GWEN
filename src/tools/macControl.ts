@@ -175,6 +175,27 @@ export async function sendWhatsApp({ contact, message, draftOnly = false } = {})
   }
 }
 
+/**
+ * Scroll the currently focused window up or down via a synthesized
+ * CGEvent scroll-wheel event (JXA → CoreGraphics).
+ * @param {{ direction?: "up" | "down", amount?: number }} input
+ */
+export async function scrollMouse({ direction = "down", amount = 5 } = {}) {
+  const dir = String(direction).toLowerCase();
+  if (!["up", "down"].includes(dir)) return "Direction must be 'up' or 'down'.";
+  const ticks = Math.max(1, Math.floor(Math.abs(Number(amount) || 5)));
+  const delta = dir === "up" ? ticks : -ticks;
+  const script = `ObjC.import('CoreGraphics');
+var e = $.CGEventCreateScrollWheelEvent($(), 1, 1, ${delta});
+$.CGEventPost(0, e);`;
+  try {
+    await execP(`osascript -l JavaScript -e ${shellEscape(script)}`);
+    return `Scrolled ${dir} ${ticks}.`;
+  } catch (err) {
+    return `Couldn't scroll: ${err.message} (Accessibility permission required.)`;
+  }
+}
+
 // ─── helpers ─────────────────────────────────────────────────────────
 
 function runAppleScript(script) {

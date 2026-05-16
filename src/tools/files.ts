@@ -63,6 +63,34 @@ export async function listFiles({ path: target, foldersOnly = false, limit = 50 
 }
 
 /**
+ * Read the text contents of a file (txt, tsx, md, json, source code, etc.).
+ * @param {{ path: string, maxChars?: number }} input
+ */
+export async function readFile({ path: target, maxChars = 20000 } = {}) {
+  if (!target) return "Tell me which file to read.";
+  const filePath = resolvePath(target);
+  try {
+    const stat = await fs.stat(filePath);
+    if (stat.isDirectory()) return `${filePath} is a folder, not a file.`;
+    const text = await fs.readFile(filePath, "utf8");
+    const trimmed = text.length > maxChars ? text.slice(0, maxChars) : text;
+    return {
+      path: filePath,
+      bytes: stat.size,
+      text: trimmed,
+      truncated: text.length > maxChars,
+    };
+  } catch (err) {
+    if (err.code === "ENOENT") return `No file at ${filePath}.`;
+    if (err.code === "EACCES") return `Permission denied for ${filePath}.`;
+    if (err.code === "ERR_INVALID_ARG_VALUE" || err.message?.includes("invalid")) {
+      return `${filePath} doesn't look like a text file.`;
+    }
+    return `Couldn't read ${filePath}: ${err.message}`;
+  }
+}
+
+/**
  * Reveal a file or folder in Finder (or open a file with its default app).
  * @param {{ path: string, reveal?: boolean }} input
  */

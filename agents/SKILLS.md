@@ -85,7 +85,7 @@ function isTokenValid(): boolean
 - Reads/writes token from `GOOGLE_TOKEN_PATH`
 - Auto-refreshes access token when expired
 - First-run: opens browser for consent, saves refresh token
-- Scopes requested: `calendar.readonly` + `gmail.readonly` only
+- Scopes requested: `gmail.readonly` only (calendar reads via macOS Calendar.app by default; if the Google Calendar backend is enabled, also request `calendar.readonly`)
 - Token file is gitignored — never commit
 
 **Dependencies:** `googleapis`

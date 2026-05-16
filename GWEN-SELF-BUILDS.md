@@ -51,3 +51,98 @@ Format per entry:
 **Action:** Update the orb component so that: 1) A spider silhouette sits at the center, 2) Radiating waves are fluid waveform-style (sinusoidal/organic, not solid circles — like sound waves or water ripples distorted into wave shapes), 3) All colors follow the app's blue theme — no hardcoded red. The spider and waveform rings should all use the primary blue accent color with varying opacity for depth and glow.
 **Result:** ok
 
+## 2026-05-04 06:32 — fix_self_code
+**Action:** Update the get_calendar tool to read events from macOS Calendar app using AppleScript or the ical/EventKit bridge, instead of Google Calendar API. This should fetch upcoming events from all locally synced macOS Calendar accounts.
+**Result:** ok
+
+## 2026-05-04 08:44 — fix_self_code
+**Action:** Add a scroll_mouse tool that can scroll up or down on the screen by a given amount, using macOS accessibility or AppleScript/CGEvent so Gwen can scroll the currently focused window programmatically.
+**Result:** ok
+
+## 2026-05-04 09:05 — fix_self_code
+**Action:** Remove the automatic DevTools opening on startup so the developer tools panel no longer appears when the app launches.
+**Result:** ok
+
+## 2026-05-04 09:17 — fix_self_code
+**Action:** Change the listening state animation color to make it clearly distinct from the thinking state. Find where the listening and thinking state colors/glows are defined (likely in a CSS or component file) and update the listening state to use a noticeably different color — for example a vivid cyan or blue glow instead of whatever color thinking uses, so the two states are immediately distinguishable at a glance.
+**Result:** ok
+
+## 2026-05-04 09:22 — fix_self_code
+**Action:** Replace the listening state animation with a ripple effect combined with bouncing dots. The listening state should show an outward ripple ring animation along with 3 bouncing dots, making it clearly distinct from the idle and thinking states.
+**Result:** ok
+
+## 2026-05-04 09:24 — fix_self_code
+**Action:** Replace the listening state animation with a combination of ripple effect and bouncing dots. The listening state should show expanding ripple rings radiating outward along with bouncing dots, making it clearly distinct from the idle and thinking states.
+**Result:** ok
+**Notes:** files: src/components/GwenOrb.tsx, src/components/GwenOrb.css, src/components/Orb.tsx, src/components/Orb.css
+
+## 2026-05-07 18:31 — fix_self_code
+**Action:** Simplify and minimize the listening and speaking state animations in the UI. Reduce excessive motion and make the animations more subtle and minimal while maintaining visual feedback for state changes.
+**Result:** ok
+**Notes:** files: src/components/Avatar.vue, src/App.vue
+
+## 2026-05-07 18:34 — fix_self_code
+**Action:** Reduce speaking state animation to minimal — remove excess motion and keep it restrained and subtle, matching the listening state simplicity.
+**Result:** ok
+
+## 2026-05-07 18:51 — fix_self_code
+**Action:** Add full screen mode toggle to the UI. Add a single fullscreen button to the interface that toggles the Electron window between fullscreen and windowed mode.
+**Result:** ok
+**Notes:** files: src/main.ts, src/components/Chat.vue
+
+## 2026-05-07 19:07 — fix_self_code
+**Action:** Add code diff visualization to fix_self_code so when making UI updates, display the actual lines being changed with before/after comparison. This allows the user to see exactly what code modifications are being made during fixes.
+**Result:** ok
+**Notes:** files: src/main/index.ts, src/renderer/src/components/ChatInterface.vue
+
+## 2026-05-07 19:21 — repair_self
+**Action:** npm_install
+**Result:** ok
+**Notes:** relaunched
+
+## 2026-05-07 19:28 — build_software
+**Action:** Build a three-panel futuristic UI with Spider-Man theme and JARVIS touches. Left panel displays user tasks in a clean list format. Middle panel shows conversation history between the user and Gwen with message bubbles. Right panel streams live code changes and activities in real-time with a holographic/neon aesthetic. Use dark theme with neon accents (reds, blues, cyans), sleek typography, and futuristic design elements. Include subtle animations and a modern, tech-forward look inspired by Spider-Man's tech and JARVIS's interface style. Make it responsive and visually striking.
+**Result:** ok
+**Notes:** dir: src/components; framework: React with Tailwind CSS
+
+## 2026-05-07 19:47 — fix_self_code
+**Action:** Reduce animation complexity in the speaking/picking animation. Make it minimal and subtle instead of busy—remove excessive motion, keep only essential keyframes.
+**Result:** ok
+**Notes:** files: src/components/SpeakingAnimation.tsx, src/components/SpeakingAnimation.css
+
+## 2026-05-07 19:50 — fix_self_code
+**Action:** Remove all animation from the spider logo except a single minimal pulse effect. Strip out any rotation, scaling, glow flicker, or other movement. Keep only a steady, barely-noticeable opacity pulse.
+**Result:** ok
+**Notes:** files: src/components/TaskPanel.tsx, src/App.tsx
+
+## 2026-05-07 19:52 — fix_self_code
+**Action:** Remove the rotating animation around the logo in the speaking animation component. Keep only the subtle pulse effect, eliminate all rotation transforms.
+**Result:** ok
+**Notes:** files: src/components/SpeakingAnimation.tsx
+
+## 2026-05-07 19:53 — fix_self_code
+**Action:** Remove the rotation animation around the logo. Find the logo animation styles in the UI components and strip out any keyframe animations or transform rotations being applied to it. Make it completely static with no spinning or rotating motion.
+**Result:** ok
+**Notes:** files: src/components, src/App.tsx, src/App.css
+
+## 2026-05-07 19:58 — fix_self_code
+**Action:** Remove the red rotating animation with ticking lines around the logo. Keep only the blue pulse effect for active status. The red rotation is a separate animation layer that needs to be disabled in the logo component.
+**Result:** ok
+**Notes:** files: src/components/Logo.tsx, src/components/Logo.css
+
+## 2026-05-14 17:49 — fix_self_code
+**Action:** Add a read_file function that allows Gwen to read text files, TSX files, and other text-based files directly from the user's system. The function should accept a file path and return the file contents as text, similar to read_pdf but for text-based formats.
+**Result:** ok
+
+## 2026-05-16 05:08 — fix_self_code
+**Action:** Remove PDF reader from fixes file since it's already been added to the codebase.
+**Result:** ok
+
+## 2026-05-16 05:31 — fix_self_code
+**Action:** Remove PDF reader functionality, full screen mode, and live code visibility/real-time code line changes from the codebase.
+**Result:** ok
+
+## 2026-05-16 05:35 — fix_self_code
+**Action:** Restore PDF reader functionality that was removed from the codebase. Re-implement the ability to read and display PDF files.
+**Result:** ok
+

@@ -1,10 +1,12 @@
 // src/tools/memory.js — long-term memory via SQLite
 import { get, set, del, listAll, listByCategory, search as searchMem } from "../skills/sqlite.js";
+import { embedAndSave } from "../skills/semanticMemory.js";
 
 export async function remember({ key, value, category = "general" } = {}) {
   if (!key) return "I need a key to remember by.";
   if (value == null) return "I need a value to store.";
   set(key, String(value), category);
+  embedAndSave(key, String(value)).catch(() => {});
   return `Got it. I'll remember ${key.replace(/_/g, " ")}.`;
 }
 

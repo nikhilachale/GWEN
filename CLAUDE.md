@@ -10,7 +10,7 @@
 - **Node.js / ESM** — all backend logic (no Python, no CommonJS)
 - **React + Vite** — renderer UI
 - **Three.js** — audio-reactive orb visualization
-- **Claude API** (`claude-sonnet-4-20250514`) — brain + tool_use
+- **Claude API** (`claude-haiku-4-5-20251001`) — brain + tool_use
 - **Whisper API** — speech-to-text
 - **ElevenLabs** — JARVIS-style text-to-speech
 - **Google APIs** — Calendar (read) + Gmail (read-only)
@@ -38,7 +38,7 @@ gwen/
 │   │   ├── wakeword.js           ← "Hey Gwen" detection via Porcupine
 │   │   └── screen.js             ← screenshot-desktop → base64
 │   ├── tools/
-│   │   ├── calendar.js           ← Google Calendar read
+│   │   ├── calendar.js           ← Google Calendar or macOS Calendar.app read
 │   │   ├── email.js              ← Gmail read-only
 │   │   ├── search.js             ← Tavily web search
 │   │   ├── tasks.js              ← local task/reminder store
@@ -164,7 +164,7 @@ See `agents/AGENTS.md` for full agent specs. Quick summary:
 |---|---|
 | `orchestrator` | Main Gwen brain — routes to all tools/agents |
 | `voice-agent` | Manages STT/TTS pipeline + state machine |
-| `calendar-agent` | Google Calendar scoped logic |
+| `calendar-agent` | Google Calendar or macOS Calendar.app scoped logic |
 | `email-agent` | Gmail read-only scoped logic |
 | `search-agent` | Web search + result summarization |
 | `task-agent` | Task CRUD + reminder scheduling |
@@ -243,7 +243,7 @@ node scripts/setup-google-oauth.js
 - [ ] **Step 3** — `core/brain.js` with echo tool (confirm voice loop works)
 - [ ] **Step 4** — `ui/App.jsx` + `ui/Orb.jsx` + IPC wired up
 - [ ] **Step 5** — `tools/memory.js` + `tools/tasks.js` + `tools/notes.js`
-- [ ] **Step 6** — `scripts/setup-google-oauth.js` → `tools/calendar.js` + `tools/email.js`
+- [ ] **Step 6** — `tools/calendar.js` (Google Calendar or macOS Calendar.app) + `scripts/setup-google-oauth.js` → `tools/email.js`
 - [ ] **Step 7** — `tools/search.js` (Tavily)
 - [ ] **Step 8** — `tools/dayplan.js` (combine calendar + tasks)
 - [ ] **Step 9** — `core/screen.js` + wire into brain

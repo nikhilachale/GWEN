@@ -3,7 +3,6 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { sendCodeOutput } from "../skills/ipc.js";
 import { appendSelfBuild } from "../skills/buildLog.js";
 import * as memoryTool from "./memory.js";
 
@@ -88,8 +87,8 @@ function runClaudeCode(prompt, cwd) {
       { cwd, env: process.env }
     );
 
-    child.stdout.on("data", (d) => sendCodeOutput(d.toString()));
-    child.stderr.on("data", (d) => sendCodeOutput(`[err] ${d.toString()}`));
+    child.stdout.on("data", () => {});
+    child.stderr.on("data", () => {});
 
     child.on("error", reject);
     child.on("exit", (code) => {

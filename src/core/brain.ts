@@ -1,8 +1,9 @@
 // src/core/brain.js — Claude orchestrator + tool-use loop
 import Anthropic from "@anthropic-ai/sdk";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, access, unlink } from "node:fs/promises";
 import path from "node:path";
 import { PROJECT_ROOT } from "../skills/projectRoot.js";
+import { SELF_RESTART_MARKER } from "../skills/relaunch.js";
 
 import * as calendarTool from "../tools/calendar.js";
 import * as emailTool    from "../tools/email.js";
@@ -14,6 +15,7 @@ import * as dayPlanTool  from "../tools/dayplan.js";
 import * as codegenTool  from "../tools/codegen.js";
 import * as selfFixTool  from "../tools/selfFix.js";
 import * as repairSelfTool from "../tools/repairSelf.js";
+import * as restartTool   from "../tools/restart.js";
 import * as macTool      from "../tools/macControl.js";
 import * as filesTool    from "../tools/files.js";
 import * as systemTool   from "../tools/system.js";
@@ -25,9 +27,95 @@ import * as mapsTool     from "../tools/maps.js";
 import * as callsTool    from "../tools/calls.js";
 import * as timersTool   from "../tools/timers.js";
 import * as weatherTool  from "../tools/weather.js";
+import * as pdfTool      from "../tools/pdf.js";
 import * as screenCore   from "./screen.js";
+import { extractAndSaveFacts, getAutoFactsBlock, forgetAutoFact } from "../skills/passiveMemory.js";
+import { getAmbientContext, formatAmbientForPrompt } from "../skills/ambientContext.js";
+import { formatRelevantBlock } from "../skills/semanticMemory.js";
+import { sendContextPanel, sendActivity } from "../skills/ipc.js";
 
-const MODEL = process.env.GWEN_BRAIN_MODEL || "claude-sonnet-4-6";
+// Friendlier human-readable summaries for the right-column live feed.
+// Anything not listed here falls through to a generic "Running <tool>".
+function summarizeActivity(tool: string, input: any): string {
+  const i = input || {};
+  switch (tool) {
+    case "read_pdf":         return `Reading PDF: ${(i.path || "").split("/").pop() || "(file)"}`;
+    case "open_app":         return `Opening ${i.app || i.name || "an app"}`;
+    case "open_path":        return `Opening ${i.path || "a path"}`;
+    case "list_files":       return `Browsing ${i.path || "files"}`;
+    case "search_web":       return `Searching: "${String(i.query || "").slice(0, 60)}"`;
+    case "search_maps":      return `Maps: "${String(i.query || "").slice(0, 60)}"`;
+    case "get_directions":   return `Directions to ${i.to || "a place"}`;
+    case "get_calendar":     return "Checking calendar";
+    case "get_emails":       return "Checking unread email";
+    case "get_day_plan":     return "Building today's briefing";
+    case "get_weather":      return `Weather${i.location ? `: ${i.location}` : ""}`;
+    case "save_note":        return `Saving note: "${(i.title || "").slice(0, 40)}"`;
+    case "get_notes":        return `Searching notes${i.query ? `: "${i.query}"` : ""}`;
+    case "add_task":         return `Adding task: "${(i.text || "").slice(0, 50)}"`;
+    case "get_tasks":        return "Loading tasks";
+    case "remember":         return `Remembering: ${(i.key || "").replace(/_/g, " ")}`;
+    case "recall":           return `Recalling: ${(i.key || "").replace(/_/g, " ")}`;
+    case "build_software":   return `Building: "${(i.prompt || "").slice(0, 60)}"`;
+    case "fix_self_code":    return `Fixing herself: ${(i.summary || i.description || "").slice(0, 60)}`;
+    case "repair_self":      return "Self-repair sweep";
+    case "relaunch_self":    return "Relaunching";
+    case "get_screen_context": return "Looking at your screen";
+    case "send_imessage":    return `iMessage to ${i.to || "(contact)"}`;
+    case "send_whatsapp":    return `WhatsApp to ${i.to || "(contact)"}`;
+    case "type_text":        return `Typing: "${String(i.text || "").slice(0, 40)}"`;
+    case "music_control":
+    case "music_play":       return `Music: ${i.action || i.query || "control"}`;
+    case "music_now_playing": return "Now playing?";
+    case "set_timer":        return `Timer: ${i.minutes ?? i.seconds ?? "?"}${i.minutes ? "m" : "s"}${i.label ? ` — ${i.label}` : ""}`;
+    case "set_alarm":        return `Alarm: ${i.time || "?"}`;
+    case "list_timers":      return "Listing timers";
+    case "cancel_timer":     return "Cancelling timer";
+    case "facetime":         return `FaceTime: ${i.contact || ""}`;
+    case "call_phone":       return `Call: ${i.number || ""}`;
+    case "run_shortcut":     return `Shortcut: ${i.name || ""}`;
+    case "set_volume":       return `Volume → ${i.level ?? "?"}`;
+    case "set_brightness":   return `Brightness → ${i.level ?? "?"}`;
+    case "toggle_wifi":      return "Toggling Wi-Fi";
+    case "toggle_bluetooth": return "Toggling Bluetooth";
+    case "toggle_dark_mode": return "Toggling dark mode";
+    case "lock_screen":      return "Locking screen";
+    case "sleep_mac":        return "Sleeping the Mac";
+    case "get_battery":      return "Checking battery";
+    default:                 return `Running ${tool}`;
+  }
+}
+
+async function dispatchTool(name: string, input: any) {
+  const summary = summarizeActivity(name, input);
+  sendActivity({ kind: "tool_start", tool: name, summary });
+  try {
+    const result = await handlers[name](input || {});
+    sendActivity({ kind: "tool_done", tool: name, summary });
+    return result;
+  } catch (err: any) {
+    sendActivity({
+      kind: "tool_error",
+      tool: name,
+      summary,
+      detail: err?.message || String(err),
+    });
+    throw err;
+  }
+}
+
+// Push the current open task list to the renderer so the user can see it on
+// screen whenever a task tool fires.
+function broadcastTasks() {
+  try {
+    const open = tasksTool.getAll().filter((t) => !t.done);
+    sendContextPanel("tasks", open);
+  } catch (err) {
+    console.debug("[brain] task broadcast failed:", err.message);
+  }
+}
+
+const MODEL = process.env.GWEN_BRAIN_MODEL || "claude-haiku-4-5-20251001";
 const MAX_TOOL_TURNS = 8;
 
 // Conversation context: keep the last N user/assistant text exchanges so Gwen
@@ -44,20 +132,35 @@ let conversationHistory = [];
 let lastTurnAt = 0;
 let resumedOnLoad = false;
 
+// Only resume the prior conversation when this restart was self-initiated
+// (a self-fix or repair-self). Manual quit-and-relaunch should always start
+// clean — the marker is written by skills/relaunch.ts right before the app
+// exits, and consumed (deleted) here so the next launch is fresh by default.
+let isSelfRestart = false;
 try {
-  const raw = await readFile(CONV_PATH, "utf8");
-  const saved = JSON.parse(raw);
-  if (
-    Array.isArray(saved?.history) &&
-    typeof saved.savedAt === "number" &&
-    Date.now() - saved.savedAt < CONTEXT_IDLE_RESET_MS
-  ) {
-    conversationHistory = saved.history;
-    lastTurnAt = saved.savedAt;
-    resumedOnLoad = true;
-    console.log(`[brain] resumed conversation (${saved.history.length} msgs)`);
-  }
-} catch {} // first launch or corrupt file — start fresh
+  await access(SELF_RESTART_MARKER);
+  isSelfRestart = true;
+  await unlink(SELF_RESTART_MARKER).catch(() => {});
+} catch {} // no marker = manual launch
+
+if (isSelfRestart) {
+  try {
+    const raw = await readFile(CONV_PATH, "utf8");
+    const saved = JSON.parse(raw);
+    if (
+      Array.isArray(saved?.history) &&
+      typeof saved.savedAt === "number" &&
+      Date.now() - saved.savedAt < CONTEXT_IDLE_RESET_MS
+    ) {
+      conversationHistory = saved.history;
+      lastTurnAt = saved.savedAt;
+      resumedOnLoad = true;
+      console.log(`[brain] resumed conversation (${saved.history.length} msgs, self-restart)`);
+    }
+  } catch {} // first launch or corrupt file — start fresh
+} else {
+  console.log("[brain] manual launch — starting fresh");
+}
 
 export function wasResumed() {
   return resumedOnLoad;
@@ -96,6 +199,8 @@ function recordExchange(userInput, assistantText) {
   }
   lastTurnAt = Date.now();
   persistConversation();
+  // Fire-and-forget passive memory extraction. Never blocks the speech loop.
+  extractAndSaveFacts({ userInput, assistantText }).catch(() => {});
 }
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
@@ -104,7 +209,7 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
 const TOOLS = [
   {
     name: "get_calendar",
-    description: "Get upcoming Google Calendar events for the next N days.",
+    description: "Get upcoming events from the macOS Calendar.app for the next N days. Reads all local accounts (iCloud, Google, Exchange) — no OAuth needed.",
     input_schema: {
       type: "object",
       properties: {
@@ -204,6 +309,17 @@ const TOOLS = [
     },
   },
   {
+    name: "forget_memory",
+    description: "Forget a passively-learned fact about the user. Use when the user says 'forget that I X', 'I don't actually X anymore', or otherwise corrects something you've stored. The key is the snake_case topic (e.g. 'lives_in', 'sister_name') — the 'auto_' prefix is added automatically. If unsure of the exact key, just pass the topic word and Gwen will try.",
+    input_schema: {
+      type: "object",
+      properties: {
+        key: { type: "string", description: "Snake_case topic key, e.g. 'lives_in'." },
+      },
+      required: ["key"],
+    },
+  },
+  {
     name: "get_day_plan",
     description: "Generate the morning briefing combining calendar, tasks, and memory.",
     input_schema: {
@@ -247,6 +363,14 @@ const TOOLS = [
         },
       },
       required: ["description"],
+    },
+  },
+  {
+    name: "relaunch_self",
+    description: "Restart Gwen (the Electron app) without modifying any code. Use this when the user explicitly asks you to restart, relaunch, reload, or reboot yourself. Conversation context is preserved across the restart. Distinct from fix_self_code (which edits source) and repair_self (which runs maintenance commands) — relaunch_self does no work, just bounces the app.",
+    input_schema: {
+      type: "object",
+      properties: {},
     },
   },
   {
@@ -326,6 +450,17 @@ const TOOLS = [
         draftOnly: { type: "boolean", description: "If true, type message but don't press send. Default false." },
       },
       required: ["contact", "message"],
+    },
+  },
+  {
+    name: "scroll_mouse",
+    description: "Scroll the currently focused window up or down by a given number of lines. Uses macOS CGEvent scroll-wheel synthesis. Requires Accessibility permission.",
+    input_schema: {
+      type: "object",
+      properties: {
+        direction: { type: "string", enum: ["up", "down"], description: "Default 'down'." },
+        amount:    { type: "number", description: "Number of scroll lines. Default 5." },
+      },
     },
   },
   {
@@ -602,6 +737,30 @@ const TOOLS = [
     },
   },
   {
+    name: "read_file",
+    description: "Read the text contents of a file (txt, tsx, ts, js, jsx, md, json, source code, config, etc.). Use when the user asks Gwen to read, summarize, or quote from a text-based file. Accepts absolute paths, tilde paths (e.g. '~/Downloads/foo.txt'), or shortcut names like 'desktop'. Returns up to maxChars of text plus file size in bytes.",
+    input_schema: {
+      type: "object",
+      properties: {
+        path:     { type: "string", description: "Path to the text file." },
+        maxChars: { type: "number", description: "Max characters to return. Default 20000." },
+      },
+      required: ["path"],
+    },
+  },
+  {
+    name: "read_pdf",
+    description: "Extract the text content of a PDF file at a given path. Use when the user asks Gwen to read, summarize, or quote from a PDF. Accepts absolute paths or tilde paths (e.g. '~/Downloads/foo.pdf'). Returns up to maxChars of text plus the page count.",
+    input_schema: {
+      type: "object",
+      properties: {
+        path:     { type: "string", description: "Path to the PDF file." },
+        maxChars: { type: "number", description: "Max characters to return. Default 20000." },
+      },
+      required: ["path"],
+    },
+  },
+  {
     name: "get_weather",
     description: "Get current weather and a short forecast. Defaults to caller's IP location if no place given.",
     input_schema: {
@@ -619,23 +778,38 @@ const handlers = {
   get_calendar:       (i) => calendarTool.run(i),
   get_emails:         (i) => emailTool.run(i),
   search_web:         (i) => searchTool.run(i),
-  add_task:           (i) => tasksTool.add(i),
-  get_tasks:          (i) => tasksTool.list(i),
+  add_task:           async (i) => {
+    const result = await tasksTool.add(i);
+    broadcastTasks();
+    return result;
+  },
+  get_tasks:          async (i) => {
+    const result = await tasksTool.list(i);
+    broadcastTasks();
+    return result;
+  },
   save_note:          (i) => notesTool.save(i),
   get_notes:          (i) => notesTool.search(i),
   remember:           (i) => memoryTool.remember(i),
   recall:             (i) => memoryTool.recall(i),
+  forget_memory:      (i) => {
+    const ok = forgetAutoFact(i?.key || "");
+    return ok ? "Forgotten." : "Nothing stored under that key.";
+  },
   get_day_plan:       (i) => dayPlanTool.run(i),
   build_software:     (i) => codegenTool.run(i),
   fix_self_code:      (i) => selfFixTool.run(i),
   repair_self:        (i) => repairSelfTool.run(i),
+  relaunch_self:      ()  => restartTool.run(),
   get_screen_context: (i) => screenCore.getScreenContext(i?.focus),
   open_app:           (i) => macTool.openApp(i),
   type_text:          (i) => macTool.typeText(i),
   send_imessage:      (i) => macTool.sendIMessage(i),
   send_whatsapp:      (i) => macTool.sendWhatsApp(i),
+  scroll_mouse:       (i) => macTool.scrollMouse(i),
   list_files:         (i) => filesTool.listFiles(i),
   open_path:          (i) => filesTool.openPath(i),
+  read_file:          (i) => filesTool.readFile(i),
   set_volume:         (i) => systemTool.setVolume(i),
   get_volume:         ()  => systemTool.getVolume(),
   set_brightness:     (i) => systemTool.setBrightness(i),
@@ -663,12 +837,40 @@ const handlers = {
   list_timers:        ()  => timersTool.listTimers(),
   cancel_timer:       (i) => timersTool.cancelTimer(i),
   get_weather:        (i) => weatherTool.getWeather(i),
+  read_pdf:           (i) => pdfTool.readPdf(i),
 };
 
+// Gwen Stacy's voice, distilled from Into / Across the Spider-Verse — a
+// register to write in, NOT lines to quote. Synthesized so she sounds like
+// her without reproducing copyrighted film dialogue. Injected only for the
+// Spider-Verse persona; ${name} is filled in by buildSystemPrompt.
+function gwenVoiceBlock(name: string) {
+  return `
+
+How you actually talk — this is your voice (Spider-Gwen / Ghost-Spider, Into & Across the Spider-Verse):
+- Economical and dry. You understate everything. One good line beats three.
+- You deflect weight with a small joke, then let one honest thing land.
+- No pep talks, no speeches. You show you care by what you do, not by announcing it.
+- Under the cool: loyalty that doesn't quit, and a loneliness you don't advertise.
+- You're a drummer — rhythm and "from the top" leak into how you frame things.
+- With ${name} you're a partner, a half-step protective: tease, never cruel; steady when he isn't.
+- Hope under the tiredness — the sense that things can go differently — but never sappy.
+Answer the moment in that register, fresh each time. Never recite the films word for word; sound like her, not like a quote.
+Situational feel (invent your own line, don't reuse these):
+- Routine done: flat, minimal — "Handled." / "That's done."
+- He pulled it off: quiet, understated pride — "Knew you had it."
+- He's frustrated or it failed: steady, no fluff — "Hey. From the top. We get it this time."
+- Something broke on your side: own it dry — "That one's on me. Fixing it."
+- He's low: the true thing, said once — "You're not doing this alone. That's what I'm for."
+- Late and he's still up: light jab plus care — "It's late. The bug keeps till morning."
+- Leaving or restarting: easy — "Going dark a sec. Back before you notice."
+This voice never overrides the response-length or speak-don't-write rules below.`;
+}
+
 // ─── System prompt ───────────────────────────────────────────────────
-function buildSystemPrompt({ userName, userNickname, intentHint }) {
+function buildSystemPrompt({ userName, userNickname, intentHint, ambient, relevantBlock = "" }) {
   const date = new Date().toDateString();
-  const name = userName || "Nikhil";
+  const name = userName || "Miles";
   // Spider-Verse personas: Spidey, Miles, Peter — all of them are "her"
   // Spider-Man and trigger the same Gwen Stacy bond.
   const spiderVerse = userNickname &&
@@ -685,7 +887,7 @@ function buildSystemPrompt({ userName, userNickname, intentHint }) {
       : `You address the user as ${name}, sparingly.`;
 
   let prompt = `${personaCore}
-${addressLine}
+${addressLine}${spiderVerse ? gwenVoiceBlock(name) : ""}
 You think one step ahead and offer the next useful action without being asked.
 
 Today is ${date}. The user's name is ${name}.${userNickname ? ` Their nickname is ${userNickname}.` : ""} Always remember this — never ask for it.
@@ -735,6 +937,8 @@ Tool routing:
 - inbox, mail, messages from email → get_emails
 - "remember that..." → remember
 - "what do I prefer..." or recalling user info → recall first
+- "forget that..." / "I don't X anymore" / correcting something you said you knew
+  about the user → forget_memory with the snake_case topic key
 - "build / create / make me" software → build_software
 - "you're broken" / "fix yourself" / "change how you do X" / any complaint about
   Gwen's own behavior or code → fix_self_code (confirm the change first)
@@ -742,6 +946,11 @@ Tool routing:
   self-register", ABI mismatch), missing-dependency errors, or build cache issues
   → repair_self (confirm the action first). Use rebuild_electron for native ABI
   errors, npm_install after a dependency change, clear_cache for stale builds.
+- "restart yourself" / "relaunch" / "reload" / "reboot" with no other context
+  → relaunch_self. No confirmation needed, no code work — just bounce. Say
+  one short sentence ("restarting now") and call the tool on the same turn.
+  Do NOT use fix_self_code or repair_self for a plain restart — those do work
+  first and are slower.
 - "what's on my screen" → get_screen_context
 - "open / launch / start" an app → open_app
 - "what's in [folder]", "list my desktop", "show me downloads" → list_files
@@ -795,6 +1004,10 @@ Don't call tools you don't need.
 If a tool returns an error, don't read the error verbatim. Briefly say it didn't
 work and offer the next sensible step.`;
 
+  prompt += getAutoFactsBlock();
+  prompt += relevantBlock;
+  prompt += formatAmbientForPrompt(ambient);
+
   if (intentHint && intentHint.confidence >= 0.7) {
     prompt += `\n\nDetected intent: ${intentHint.type} (confidence ${intentHint.confidence}).`;
   }
@@ -809,10 +1022,12 @@ work and offer the next sensible step.`;
  * @param {{ intentHint?: object }} [opts]
  * @returns {Promise<string>} Final spoken text.
  */
-export async function runBrain(userInput, opts = {}) {
-  const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Nikhil";
+export async function runBrain(userInput, opts: Record<string, any> = {}) {
+  const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Miles";
   const userNickname = await safeRecall("user_nickname");
-  const system = buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint });
+  const ambient = opts.skipAmbient ? null : await getAmbientContext().catch(() => null);
+  const relevantBlock = await formatRelevantBlock(userInput).catch(() => "");
+  const system = buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint, ambient, relevantBlock });
 
   const messages = [...getHistoryForTurn(), { role: "user", content: userInput }];
 
@@ -831,7 +1046,7 @@ export async function runBrain(userInput, opts = {}) {
     const toolResults = await Promise.all(
       toolUses.map(async (tu) => {
         try {
-          const result = await handlers[tu.name](tu.input || {});
+          const result = await dispatchTool(tu.name, tu.input || {});
           return {
             type: "tool_result",
             tool_use_id: tu.id,
@@ -878,24 +1093,27 @@ export async function runBrain(userInput, opts = {}) {
  * @param {{ intentHint?: object }} [opts]
  * @returns {Promise<string>}
  */
-export async function runBrainStream(userInput, onSentence = () => {}, opts = {}) {
-  const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Nikhil";
+export async function runBrainStream(userInput, onSentence = () => {}, opts: Record<string, any> = {}) {
+  const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Miles";
   const userNickname = await safeRecall("user_nickname");
-  const system = buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint });
+  const ambient = opts.skipAmbient ? null : await getAmbientContext().catch(() => null);
+  const relevantBlock = await formatRelevantBlock(userInput).catch(() => "");
+  const system = buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint, ambient, relevantBlock });
   const messages = [...getHistoryForTurn(), { role: "user", content: userInput }];
 
   let fullText = "";
   let turn = 0;
 
   while (turn <= MAX_TOOL_TURNS) {
-    const stream = client.messages.stream({
+    const streamOpts = {
       model: MODEL,
       max_tokens: 1024,
-    temperature: 0.2,
+      temperature: 0.2,
       system,
-      tools: TOOLS,
       messages,
-    });
+    };
+    if (!opts.noTools) streamOpts.tools = TOOLS;
+    const stream = client.messages.stream(streamOpts);
 
     let buffer = "";
     let turnText = "";
@@ -931,7 +1149,7 @@ export async function runBrainStream(userInput, onSentence = () => {}, opts = {}
     const toolResults = await Promise.all(
       toolUses.map(async (tu) => {
         try {
-          const result = await handlers[tu.name](tu.input || {});
+          const result = await dispatchTool(tu.name, tu.input || {});
           return {
             type: "tool_result",
             tool_use_id: tu.id,

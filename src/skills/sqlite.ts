@@ -27,6 +27,11 @@ function ensureDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_memory_category ON memory(category);
   `);
+  // Migration: add embedding BLOB column for semantic recall (Layer 1).
+  const cols = db.prepare("PRAGMA table_info(memory)").all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === "embedding")) {
+    db.exec("ALTER TABLE memory ADD COLUMN embedding BLOB");
+  }
   return db;
 }
 
@@ -73,4 +78,84 @@ export function search(query) {
        ORDER BY updated_at DESC LIMIT 20`
     )
     .all(like, like);
+}
+
+// ─── Embedding helpers (Layer 1: semantic recall) ───────────────────
+export function setEmbedding(key: string, embedding: Float32Array): void {
+  ensureDb()
+    .prepare("UPDATE memory SET embedding = ? WHERE key = ?")
+    .run(Buffer.from(embedding.buffer, embedding.byteOffset, embedding.byteLength), key);
+}
+
+export function getRowsWithEmbeddings(): Array<{
+  key: string;
+  value: string;
+  category: string;
+  updated_at: string;
+  embedding: Float32Array;
+}> {
+  const rows = ensureDb()
+    .prepare(
+      "SELECT key, value, category, updated_at, embedding FROM memory WHERE embedding IS NOT NULL"
+    )
+    .all() as Array<{
+    key: string;
+    value: string;
+    category: string;
+    updated_at: string;
+    embedding: Buffer;
+  }>;
+  return rows.map((r) => ({
+    key: r.key,
+    value: r.value,
+    category: r.category,
+    updated_at: r.updated_at,
+    embedding: new Float32Array(
+      r.embedding.buffer,
+      r.embedding.byteOffset,
+      r.embedding.byteLength / 4
+    ),
+  }));
+}
+
+export function getRowsMissingEmbeddings(): Array<{ key: string; value: string }> {
+  return ensureDb()
+    .prepare("SELECT key, value FROM memory WHERE embedding IS NULL")
+    .all() as Array<{ key: string; value: string }>;
+}
+
+// ─── Hygiene helpers ────────────────────────────────────────────────
+export function getFullRowsByCategory(category: string): Array<{
+  key: string;
+  value: string;
+  category: string;
+  updated_at: string;
+  embedding: Float32Array | null;
+}> {
+  const rows = ensureDb()
+    .prepare(
+      "SELECT key, value, category, updated_at, embedding FROM memory WHERE category = ? ORDER BY updated_at DESC"
+    )
+    .all(category) as Array<{
+    key: string;
+    value: string;
+    category: string;
+    updated_at: string;
+    embedding: Buffer | null;
+  }>;
+  return rows.map((r) => ({
+    key: r.key,
+    value: r.value,
+    category: r.category,
+    updated_at: r.updated_at,
+    embedding: r.embedding
+      ? new Float32Array(r.embedding.buffer, r.embedding.byteOffset, r.embedding.byteLength / 4)
+      : null,
+  }));
+}
+
+export function countByCategory(): Array<{ category: string; n: number }> {
+  return ensureDb()
+    .prepare("SELECT category, COUNT(*) as n FROM memory GROUP BY category ORDER BY n DESC")
+    .all() as Array<{ category: string; n: number }>;
 }

@@ -6,7 +6,7 @@
 import { spawn } from "node:child_process";
 import { rm } from "node:fs/promises";
 import path from "node:path";
-import { sendCodeOutput, sendSelfFix } from "../skills/ipc.js";
+import { sendSelfFix } from "../skills/ipc.js";
 import { appendSelfBuild } from "../skills/buildLog.js";
 import { PROJECT_ROOT } from "../skills/projectRoot.js";
 import { relaunchApp } from "../skills/relaunch.js";
@@ -27,7 +27,6 @@ const ACTIONS = {
     run: async () => {
       for (const dir of ["dist-electron", "dist", "node_modules/.vite"]) {
         await rm(path.join(PROJECT_ROOT, dir), { recursive: true, force: true });
-        sendCodeOutput(`removed ${dir}\n`);
       }
     },
     relaunch: false,
@@ -42,9 +41,7 @@ export async function run({ action, relaunch } = {}) {
 
   sendSelfFix(true, op.label);
   try {
-    sendCodeOutput(`\n[repair] ${op.label}...\n`);
     await op.run();
-    sendCodeOutput(`[repair] done: ${op.label}\n`);
 
     const shouldRelaunch = relaunch ?? op.relaunch;
     await appendSelfBuild({
@@ -77,8 +74,8 @@ export async function run({ action, relaunch } = {}) {
 function spawnCmd(cmd, args) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { cwd: PROJECT_ROOT, env: process.env });
-    child.stdout.on("data", (d) => sendCodeOutput(d.toString()));
-    child.stderr.on("data", (d) => sendCodeOutput(`[err] ${d.toString()}`));
+    child.stdout.on("data", () => {});
+    child.stderr.on("data", () => {});
     child.on("error", reject);
     child.on("exit", (code) => {
       if (code === 0) resolve();
