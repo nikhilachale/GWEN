@@ -187,27 +187,7 @@ npm run test:tool memory
 npm run test:tool calendar
 ```
 
----
 
-## Troubleshooting
-
-**`better-sqlite3` errors after install** — run `npx electron-rebuild -f -w better-sqlite3`
-
-**macOS: "Gwen can't access the microphone"** — System Settings → Privacy & Security → Microphone → enable for Electron/Terminal
-
-**macOS: screen capture is black** — System Settings → Privacy & Security → Screen Recording → enable
-
-**macOS: typing or messaging tools fail silently** — System Settings → Privacy & Security → Accessibility → enable Electron/Terminal
-
-**macOS: Reminders / Notes / Music tools fail** — first use triggers an Automation prompt. Approve it in System Settings → Privacy & Security → Automation
-
-**Bluetooth toggle says "needs blueutil"** — `brew install blueutil`
-
-**Phone call opens but doesn't dial** — pair your iPhone, enable *Settings → Cellular → Calls on Other Devices* on the phone
-
-**Whisper returns empty** — usually the mic isn't being captured; check `sox -V` returns a version
-
----
 
 ## License
 
