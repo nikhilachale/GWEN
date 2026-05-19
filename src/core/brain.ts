@@ -104,6 +104,36 @@ async function dispatchTool(name: string, input: any) {
   }
 }
 
+// Circuit breaker for the tool loop: stop early if the model is stuck — the
+// same tool calls repeating verbatim, or every tool erroring two turns running
+// — instead of burning all MAX_TOOL_TURNS (and tokens) on a doomed retry.
+function makeToolCircuit() {
+  return { errStreak: 0, lastSig: "" };
+}
+function tripCircuit(state, toolUses, toolResults) {
+  const sig = toolUses
+    .map((t) => `${t.name}:${JSON.stringify(t.input || {})}`)
+    .sort()
+    .join("|");
+  const allErrored =
+    toolResults.length > 0 && toolResults.every((r) => r.is_error);
+  state.errStreak = allErrored ? state.errStreak + 1 : 0;
+  const looping = sig !== "" && sig === state.lastSig;
+  state.lastSig = sig;
+  if (state.errStreak >= 2) return "repeated tool errors";
+  if (looping) return "the same tool call repeating";
+  return null;
+}
+function circuitReply(toolResults, reason) {
+  const detail = String(toolResults.find((r) => r.is_error)?.content || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
+  return detail
+    ? `I hit a snag and stopped retrying (${reason}). ${detail}`
+    : `I hit a snag and stopped retrying (${reason}).`;
+}
+
 // Push the current open task list to the renderer so the user can see it on
 // screen whenever a task tool fires.
 function broadcastTasks() {
@@ -840,6 +870,23 @@ const handlers = {
   read_pdf:           (i) => pdfTool.readPdf(i),
 };
 
+// Fail loud at boot if a tool schema and its handler drift apart. The TOOLS
+// array and handlers map are kept in sync by hand; a typo here otherwise
+// silently drops a tool with no error until Claude tries to call it.
+(function validateToolRegistry() {
+  const schemaNames = new Set(TOOLS.map((t) => t.name));
+  const handlerNames = new Set(Object.keys(handlers));
+  const missingHandler = [...schemaNames].filter((n) => !handlerNames.has(n));
+  const missingSchema = [...handlerNames].filter((n) => !schemaNames.has(n));
+  if (missingHandler.length || missingSchema.length) {
+    throw new Error(
+      "[brain] tool registry out of sync — " +
+        `schemas without handlers: [${missingHandler.join(", ")}]; ` +
+        `handlers without schemas: [${missingSchema.join(", ")}]`
+    );
+  }
+})();
+
 // Gwen Stacy's voice, distilled from Into / Across the Spider-Verse — a
 // register to write in, NOT lines to quote. Synthesized so she sounds like
 // her without reproducing copyrighted film dialogue. Injected only for the
@@ -1041,6 +1088,7 @@ export async function runBrain(userInput, opts: Record<string, any> = {}) {
   });
 
   let turn = 0;
+  const circuit = makeToolCircuit();
   while (response.stop_reason === "tool_use" && turn < MAX_TOOL_TURNS) {
     const toolUses = response.content.filter((b) => b.type === "tool_use");
     const toolResults = await Promise.all(
@@ -1066,6 +1114,14 @@ export async function runBrain(userInput, opts: Record<string, any> = {}) {
 
     messages.push({ role: "assistant", content: response.content });
     messages.push({ role: "user", content: toolResults });
+
+    const tripped = tripCircuit(circuit, toolUses, toolResults);
+    if (tripped) {
+      console.warn(`[brain] circuit breaker: ${tripped} after ${turn + 1} tool turn(s)`);
+      const reply = circuitReply(toolResults, tripped);
+      if (!opts.skipHistory) recordExchange(userInput, reply);
+      return reply;
+    }
 
     response = await client.messages.create({
       model: MODEL,
@@ -1103,6 +1159,7 @@ export async function runBrainStream(userInput, onSentence = () => {}, opts: Rec
 
   let fullText = "";
   let turn = 0;
+  const circuit = makeToolCircuit();
 
   while (turn <= MAX_TOOL_TURNS) {
     const streamOpts = {
@@ -1169,6 +1226,16 @@ export async function runBrainStream(userInput, onSentence = () => {}, opts: Rec
 
     messages.push({ role: "assistant", content: finalMessage.content });
     messages.push({ role: "user", content: toolResults });
+
+    const tripped = tripCircuit(circuit, toolUses, toolResults);
+    if (tripped) {
+      console.warn(`[brain] circuit breaker: ${tripped} after ${turn + 1} tool turn(s)`);
+      const reply = circuitReply(toolResults, tripped);
+      onSentence(reply);
+      const out = fullText ? `${fullText} ${reply}` : reply;
+      if (!opts.skipHistory) recordExchange(userInput, out);
+      return out;
+    }
     turn++;
   }
 

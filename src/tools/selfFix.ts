@@ -23,6 +23,28 @@ export async function run({ description, files, relaunch = true } = {}) {
     await runClaudeCode(prompt, PROJECT_ROOT);
     const diff = await captureGitDiff(PROJECT_ROOT);
     if (diff) sendCodeDiff(diff);
+
+    // Build gate: never relaunch into source that doesn't compile. The build
+    // uses `tsc --noCheck`, which still fails on parse/syntax errors — exactly
+    // the catastrophic case, because a broken self-edit plus auto-relaunch is a
+    // crash loop (conversation.json resumes the broken state on every boot).
+    if (diff && relaunch) {
+      sendSelfFix(true, "verifying the build");
+      const build = await runBuildGate(PROJECT_ROOT);
+      if (!build.ok) {
+        const stashed = await stashChanges(PROJECT_ROOT);
+        await appendSelfBuild({
+          tool: "fix_self_code",
+          action: description,
+          result: "failed",
+          notes: `build failed; changes ${stashed ? "rolled back to a git stash" : "left in tree"}: ${build.tail}`,
+        });
+        return stashed
+          ? `I wrote that fix but it didn't compile, so I rolled it back instead of relaunching into a broken state. The attempt is saved in a git stash — run "git stash pop" to recover it. Build error: ${build.tail}`
+          : `I wrote that fix but it didn't compile, and I couldn't cleanly roll it back, so I'm not relaunching. Run "git diff" to inspect. Build error: ${build.tail}`;
+      }
+    }
+
     await appendSelfBuild({
       tool: "fix_self_code",
       action: description,
@@ -35,7 +57,9 @@ export async function run({ description, files, relaunch = true } = {}) {
       // respawn the dev pipeline; conversation history persists via
       // data/conversation.json so we resume on boot.
       setTimeout(() => relaunchApp(), diff ? 8000 : 2500);
-      return "Fix applied. Restarting myself now.";
+      return diff
+        ? "Fix applied and it compiles. Restarting myself now."
+        : "Fix applied. Restarting myself now.";
     }
     return "Fix applied. Review with git diff.";
   } catch (err) {
@@ -79,6 +103,51 @@ function captureGitDiff(cwd) {
     child.stdout.on("data", (d) => (out += d.toString()));
     child.on("error", () => resolve(""));
     child.on("exit", () => resolve(out));
+  });
+}
+
+// Run the real Electron build and report whether it succeeded, plus a short
+// tail of output for a voice-friendly error message.
+function runBuildGate(cwd) {
+  return new Promise((resolve) => {
+    const child = spawn("npm", ["run", "build:electron"], { cwd, env: process.env });
+    let out = "";
+    const cap = (d) => {
+      out += d.toString();
+      if (out.length > 20000) out = out.slice(-20000);
+    };
+    child.stdout.on("data", (d) => { cap(d); sendCodeOutput(d.toString()); });
+    child.stderr.on("data", (d) => { cap(d); sendCodeOutput(`[build] ${d.toString()}`); });
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve({ ok: false, tail: "build timed out after 120s" });
+    }, 120000);
+    child.on("error", (e) => {
+      clearTimeout(timer);
+      resolve({ ok: false, tail: `build could not start: ${e.message}` });
+    });
+    child.on("exit", (code) => {
+      clearTimeout(timer);
+      const tail =
+        out.trim().split("\n").filter(Boolean).slice(-6).join(" ").slice(-400) ||
+        `exit ${code}`;
+      resolve({ ok: code === 0, tail });
+    });
+  });
+}
+
+// Non-destructive rollback: stash tracked + untracked changes (NOT gitignored
+// files, so data/ and .env survive). Recoverable with `git stash pop`.
+function stashChanges(cwd) {
+  return new Promise((resolve) => {
+    const msg = `gwen-failed-selffix ${new Date().toISOString()}`;
+    const child = spawn(
+      "git",
+      ["stash", "push", "--include-untracked", "-m", msg],
+      { cwd, env: process.env }
+    );
+    child.on("error", () => resolve(false));
+    child.on("exit", (code) => resolve(code === 0));
   });
 }
 
