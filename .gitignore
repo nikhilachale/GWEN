@@ -8,6 +8,7 @@ release/
 .DS_Store
 *.log
 # Gwen-specific
+GWEN-SELF-BUILDS.md
 data/google-token.json
 data/.gwen-memory.db
 data/.gwen-memory.db-journal

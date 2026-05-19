@@ -1,7 +1,7 @@
 # Gwen — Personal AI Assistant
 
 Voice-first, always-on AI desktop assistant. Claude does the thinking;
-ElevenLabs does the talking; macOS does the work.
+Fish Audio (or ElevenLabs) does the talking; macOS does the work.
 
 ## Demo
 
@@ -51,12 +51,16 @@ cp .env.example .env
 # fill in your API keys
 ```
 
-You need at minimum:
-- `ANTHROPIC_KEY` — to make Gwen think
-- `OPENAI_KEY` — for Whisper STT
-- `ELEVEN_KEY` + `ELEVEN_VOICE_ID` — for TTS
+The only hard requirement is `ANTHROPIC_KEY` — Gwen's brain. Every other
+subsystem has a fallback, so you can run with just that one key:
 
-Google + Tavily + Porcupine keys are optional — Gwen degrades gracefully without them.
+- **STT** — `GROQ_KEY` (preferred, `whisper-large-v3-turbo`) or `OPENAI_KEY`
+  (`whisper-1`). With neither, Gwen transcribes locally via whisper.cpp
+  (`nodejs-whisper`, `base.en`) — no key, fully offline, slower.
+- **TTS** — `FISH_KEY` (+ `FISH_VOICE_ID`, preferred) or `ELEVEN_KEY` +
+  `ELEVEN_VOICE_ID`. With neither, falls back to the built-in macOS `say` voice.
+- **Google / Tavily / Porcupine** — optional. Calendar reads from macOS
+  Calendar.app without OAuth; Gwen degrades gracefully without the rest.
 
 ### 4. (Optional) Connect Gmail
 
@@ -74,7 +78,7 @@ straight from macOS Calendar.app, no OAuth required.
 npm run dev
 ```
 
-Vite serves the renderer on `localhost:5173`, Electron picks it up.
+Vite serves the renderer on `localhost:5174`, Electron picks it up.
 
 ---
 
@@ -122,9 +126,9 @@ Vite serves the renderer on `localhost:5173`, Electron picks it up.
 
 - Three.js orb (cyan → white → amber → green by state)
 - Manual mic trigger (click the orb)
-- Whisper STT
+- Speech-to-text — Groq → OpenAI → local whisper.cpp fallback chain
 - Claude tool-use loop with all tools
-- ElevenLabs streaming TTS with audio-reactive orb
+- Streaming TTS — Fish → ElevenLabs → macOS `say` fallback chain, audio-reactive orb
 - SQLite memory, JSON tasks, markdown notes
 - Tavily search
 - macOS Calendar.app (no setup — first run triggers a TCC prompt)
@@ -148,12 +152,17 @@ Vite serves the renderer on `localhost:5173`, Electron picks it up.
 User Voice
     │
     ▼
-electron/main.js ──── IPC ──── React Orb
+electron/main.ts ──── IPC ──── React UI (Orb + 3-column HUD)
     │
-    ├── core/listener.js    → Whisper
-    ├── core/brain.js       → Claude (orchestrator) → tools/* → returns text
-    └── core/speaker.js     → ElevenLabs (audio level → orb)
+    ├── core/listener.ts  → STT chain:  Groq → OpenAI → local whisper.cpp
+    ├── core/brain.ts     → Claude (orchestrator) → tools/* → returns text
+    └── core/speaker.ts   → TTS chain:  Fish → ElevenLabs → macOS `say`
+                            (streamed audio level → orb)
 ```
+
+Source is TypeScript, compiled to `dist-electron/`. `core/listener.ts` and
+`core/speaker.ts` are thin shims; the real provider-chain logic lives in
+`src/skills/stt.ts` and `src/skills/tts.ts`.
 
 See `agents/AGENTS.md` for the full hub-and-spoke agent topology.
 
