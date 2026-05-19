@@ -73,6 +73,11 @@ body::after {
   to   { background-position: 0 0, 0 0, 0 0, 0 0, 0 -120px; }
 }
 
+@keyframes gwen-speaking-glow {
+  0%, 100% { text-shadow: -1.5px 0 0 var(--magenta), 1.5px 0 0 var(--cyan), 0 0 4px rgba(0, 180, 216, 0.35); }
+  50%      { text-shadow: -1.5px 0 0 var(--magenta), 1.5px 0 0 var(--cyan), 0 0 16px rgba(0, 180, 216, 0.95); }
+}
+
 button {
   font-family: inherit;
   background: rgba(237, 28, 36, 0.08);

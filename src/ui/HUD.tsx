@@ -40,7 +40,15 @@ export default function HUD() {
       {/* Top-right */}
       <Corner pos="tr">
         <div style={{ ...styles.label, textAlign: "right" }}>STATE</div>
-        <div style={{ ...styles.value, textAlign: "right" }}>
+        <div
+          style={{
+            ...styles.value,
+            textAlign: "right",
+            ...(state === "speaking"
+              ? { animation: "gwen-speaking-glow 1s ease-in-out infinite" }
+              : {}),
+          }}
+        >
           {state.toUpperCase()}
         </div>
         <div style={styles.meterWrap}>
