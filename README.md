@@ -6,9 +6,7 @@ Audio (or ElevenLabs) does the talking, and macOS does the work.
 
 ## Demo
 
-https://github.com/nikhilachale/GWEN/raw/main/public/demo.mp4
-
-<video src="public/demo.mp4" controls width="320" muted playsinline></video>
+https://github.com/user-attachments/assets/26a0933e-3693-482c-96d8-a24dceb88bb8
 
 > ▶︎ [`public/demo.mp4`](./public/demo.mp4) — 100 s walkthrough: wake word, the audio-reactive orb, and live tool calls.
 
