@@ -1,8 +1,7 @@
-// src/core/screen.js — capture screen + describe via Claude vision
+// src/core/screen.js — capture screen + describe with optional cloud vision
 import Anthropic from "@anthropic-ai/sdk";
 import { captureScreen, getActiveAppName } from "../skills/screenshot.js";
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
 const MODEL = process.env.GWEN_VISION_MODEL || "claude-haiku-4-5-20251001";
 
 const SCREEN_PROMPT = `You are Gwen's vision module. Given a screenshot, describe what the user is
@@ -18,6 +17,14 @@ not a full description for the user.`;
 export async function getScreenContext(focus) {
   if (process.env.GWEN_DISABLE_SCREEN === "1") {
     return "Screen access is disabled in your config.";
+  }
+  const visionProvider = (process.env.GWEN_VISION_PROVIDER || "disabled").toLowerCase();
+  const client =
+    visionProvider === "anthropic" && process.env.ANTHROPIC_KEY
+      ? new Anthropic({ apiKey: process.env.ANTHROPIC_KEY })
+      : null;
+  if (visionProvider !== "anthropic" || !client) {
+    return "Screen understanding is disabled. Set GWEN_VISION_PROVIDER=anthropic and ANTHROPIC_KEY to enable it.";
   }
 
   try {

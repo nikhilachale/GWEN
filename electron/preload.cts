@@ -14,6 +14,11 @@ contextBridge.exposeInMainWorld("gwenBridge", {
     ipcRenderer.on("gwen:transcript", handler);
     return () => ipcRenderer.removeListener("gwen:transcript", handler);
   },
+  onConversation: (cb) => {
+    const handler = (_, v) => cb(v);
+    ipcRenderer.on("gwen:conversation", handler);
+    return () => ipcRenderer.removeListener("gwen:conversation", handler);
+  },
   onAudioLevel: (cb) => {
     const handler = (_, v) => cb(v);
     ipcRenderer.on("gwen:audio-level", handler);
@@ -52,7 +57,20 @@ contextBridge.exposeInMainWorld("gwenBridge", {
 
   // outgoing
   triggerListen: () => ipcRenderer.send("gwen:trigger", "listen"),
+  sendText: (text) => ipcRenderer.invoke("gwen:send-text", text),
   getState: () => ipcRenderer.invoke("gwen:get-state"),
+  getHomeDashboard: () => ipcRenderer.invoke("gwen:get-home-dashboard"),
   getFixes: () => ipcRenderer.invoke("gwen:get-fixes"),
   getTasks: () => ipcRenderer.invoke("gwen:get-tasks"),
+  getSettings: () => ipcRenderer.invoke("gwen:get-settings"),
+  updateSettings: (patch) => ipcRenderer.invoke("gwen:update-settings", patch),
+  getHealthSnapshot: () => ipcRenderer.invoke("gwen:get-health-snapshot"),
+  getConversations: (query) => ipcRenderer.invoke("gwen:get-conversations", query),
+  getCurrentConversation: () => ipcRenderer.invoke("gwen:get-current-conversation"),
+  newConversation: (title) => ipcRenderer.invoke("gwen:new-conversation", title),
+  switchConversation: (id) => ipcRenderer.invoke("gwen:switch-conversation", id),
+  renameConversation: (id, title) => ipcRenderer.invoke("gwen:rename-conversation", id, title),
+  pinConversation: (id, pinned) => ipcRenderer.invoke("gwen:pin-conversation", id, pinned),
+  deleteConversation: (id) => ipcRenderer.invoke("gwen:delete-conversation", id),
+  clearCurrentConversation: () => ipcRenderer.invoke("gwen:clear-current-conversation"),
 });

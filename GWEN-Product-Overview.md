@@ -13,7 +13,7 @@
 
 Gwen is a voice-first, always-on AI desktop assistant — a personal JARVIS. You talk to it; it talks back. It runs as a native desktop application, listens for a wake word, and routes your speech to a Claude-powered orchestrator that decides which tools to use and what to say.
 
-Unlike a chatbot in a browser tab, Gwen is ambient. It lives at the edge of your desk, always ready. It knows your calendar, reads your inbox (read-only), tracks your tasks, remembers your preferences, can search the web, can see your screen on demand, and can spawn Claude Code to build software for you — all through natural conversation.
+Unlike a chatbot in a browser tab, Gwen is ambient. It lives at the edge of your desk, always ready. It knows your calendar, reads your inbox (read-only), tracks your tasks, remembers your preferences, can search the web, can see your screen on demand, and can spawn Codex to build software for you — all through natural conversation.
 
 The visual centerpiece is an audio-reactive Three.js particle orb that pulses with Gwen's voice and changes color by state: cyan when idle, white when listening, amber when thinking, green when speaking.
 
@@ -37,7 +37,7 @@ Memory, tasks, notes, and the SQLite store all live on disk. Whisper, Claude, an
 
 ### 3. Read-only by default
 
-Gmail is read-only — Gwen literally cannot send mail because it doesn't request the scope. Calendar is read-only. Claude Code never auto-runs the software it builds. The default posture is observer, not actor.
+Gmail is read-only — Gwen literally cannot send mail because it doesn't request the scope. Calendar is read-only. Codex never auto-runs the software it builds. The default posture is observer, not actor.
 
 ### 4. Hub-and-spoke, not free-for-all
 
@@ -91,7 +91,7 @@ Everything Gwen can do, organized by capability area.
 
 ### Software building
 
-- Spawn Claude Code as a subprocess to build apps, scripts, or websites
+- Spawn Codex as a subprocess to build apps, scripts, or websites
 - Voice request → composed prompt → live build output streamed to UI
 - Default save location: `~/Gwen-projects/<slug>/`
 - Never auto-runs the built code; never auto-installs dependencies
@@ -118,7 +118,7 @@ Every layer of Gwen in one table. JavaScript-only — no Python, no TypeScript.
 | Article extraction | Mozilla Readability + jsdom | Strip nav/ads from any web page |
 | Reminders | node-cron + node-notifier | OS-level alerts + voice announcements |
 | Screen capture | screenshot-desktop + sharp | Cross-platform with auto-downscale |
-| Software builder | Claude Code CLI (spawned) | Reuses Anthropic's existing agentic coder |
+| Software builder | Codex CLI (spawned) | Uses OpenAI's local coding agent |
 
 ---
 
@@ -148,7 +148,7 @@ The repo lays out cleanly:
 
 ```
 gwen/
-├── CLAUDE.md                  ← master instructions for Claude Code
+├── CLAUDE.md                  ← master project instructions
 ├── electron/                  ← main process + preload
 ├── src/
 │   ├── core/                  ← brain, listener, speaker, screen, wakeword
@@ -177,7 +177,7 @@ Each agent has a scoped system prompt and a defined responsibility. Most are inv
 | Notes | `save_note` / `get_notes` | Markdown note save & search |
 | Memory | `remember` / `recall` | SQLite key-value persistence |
 | Planner | `get_day_plan` | Daily briefing aggregator |
-| Code | `build_software` | Spawns Claude Code CLI |
+| Code | `build_software` | Spawns Codex CLI |
 | Screen | `get_screen_context` | Screen capture + Claude vision |
 
 ---
@@ -227,7 +227,7 @@ All foundational systems are built and the voice loop runs end-to-end with click
 - Screen capture with Claude vision describe call
 - Daily briefing aggregator pulling from calendar + tasks + memory
 - Intent pre-routing for ~200ms latency reduction
-- Claude Code spawn pipeline with stdout streaming to UI
+- Codex spawn pipeline with stdout streaming to UI
 
 ### ✓ Done — Ready after one extra setup step
 
@@ -310,7 +310,7 @@ First boot will likely surface platform-specific permission prompts — mic on e
 These are non-negotiable constraints baked into the architecture.
 
 - Never write to Gmail. The send/modify scopes are not requested. Even if a user asks, the agent doesn't have the capability.
-- Never auto-execute software that Claude Code builds. The user must explicitly run it.
+- Never auto-execute software that Codex builds. The user must explicitly run it.
 - Never auto-install dependencies during a `build_software` run.
 - Never persist screenshots to disk. Capture happens in-memory; the buffer is discarded after the vision call returns.
 - Never store full email bodies in the local database — only sender, subject, date, and a 150-char snippet.

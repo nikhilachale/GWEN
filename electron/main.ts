@@ -2,12 +2,23 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { existsSync } from "node:fs";
 import dotenv from "dotenv";
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+for (const envPath of [
+  join(process.cwd(), ".env"),
+  join(__dirname, "../../.env"),
+  join(__dirname, "../.env"),
+]) {
+  if (existsSync(envPath)) {
+    dotenv.config({ path: envPath, override: false });
+    console.log(`[env] loaded ${envPath}`);
+    break;
+  }
+}
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -19,6 +30,8 @@ let currentState = "idle"; // 'idle' | 'listening' | 'thinking' | 'speaking'
 let listener, brain, speaker, screen, ipc, intent, notify, proactive;
 
 async function loadCore() {
+  const settingsMod = await import("../src/skills/settings.js");
+  await settingsMod.getSettings();
   const listenerMod  = await import("../src/core/listener.js");
   const brainMod     = await import("../src/core/brain.js");
   const speakerMod   = await import("../src/core/speaker.js");
@@ -44,7 +57,9 @@ function createWindow() {
     transparent: true,
     frame: false,
     hasShadow: false,
-    resizable: false,
+    resizable: true,
+    fullscreen: true,
+    autoHideMenuBar: true,
     roundedCorners: false,
     webPreferences: {
       preload: join(__dirname, "preload.cjs"),
@@ -110,7 +125,9 @@ async function runVoiceTurn() {
       console.log(`[gwen] intent: ${intentHint.type} (${intentHint.confidence})`);
     }
 
-    const reply = await brain.runBrain(transcript, { intentHint });
+    const reply =
+      (await brain.tryLocalFastPath(transcript, { intentHint })) ||
+      (await brain.runBrain(transcript, { intentHint }));
 
     ipc.sendTranscript("assistant", reply);
     setState("speaking");
@@ -127,6 +144,44 @@ async function runVoiceTurn() {
   }
 }
 
+async function runTextTurn(text) {
+  const userText = typeof text === "string" ? text.trim() : "";
+  if (!userText) return { ok: false, error: "empty" };
+  if (currentState !== "idle") {
+    console.log("[gwen] ignoring typed message — already in", currentState);
+    return { ok: false, error: "busy" };
+  }
+
+  try {
+    ipc.sendTranscript("user", userText);
+    setState("thinking");
+
+    const intentHint = intent.detectIntent(userText);
+    if (intentHint && intentHint.confidence >= 0.7) {
+      console.log(`[gwen] typed intent: ${intentHint.type} (${intentHint.confidence})`);
+    }
+
+    const reply =
+      (await brain.tryLocalFastPath(userText, { intentHint })) ||
+      (await brain.runBrain(userText, { intentHint }));
+
+    ipc.sendTranscript("assistant", reply);
+    setState("speaking");
+
+    await speaker.speakStream(reply, (level) => ipc.sendAudioLevel(level));
+
+    setState("idle");
+    return { ok: true };
+  } catch (err) {
+    console.error("[gwen] typed turn failed:", err);
+    try {
+      await speaker.speak("Something went wrong on my end.");
+    } catch {}
+    setState("idle");
+    return { ok: false, error: err.message || "failed" };
+  }
+}
+
 // ─── App lifecycle ────────────────────────────────────────────────────
 app.whenReady().then(async () => {
   createWindow();
@@ -137,8 +192,69 @@ app.whenReady().then(async () => {
     runVoiceTurn();
   });
 
+  ipcMain.handle("gwen:send-text", async (_event, text) => {
+    return runTextTurn(text);
+  });
+
   // Get-state probe for renderer on mount
   ipcMain.handle("gwen:get-state", () => currentState);
+
+  ipcMain.handle("gwen:get-settings", async () => {
+    const settingsMod = await import("../src/skills/settings.js");
+    return settingsMod.getSettings();
+  });
+
+  ipcMain.handle("gwen:update-settings", async (_event, patch) => {
+    const settingsMod = await import("../src/skills/settings.js");
+    return settingsMod.updateSettings(patch || {});
+  });
+
+  ipcMain.handle("gwen:get-health-snapshot", async () => {
+    const healthMod = await import("../src/skills/health.js");
+    return healthMod.getHealthSnapshot();
+  });
+
+  ipcMain.handle("gwen:get-conversations", (_event, query) => {
+    return query ? brain.searchConversations(query) : brain.listConversations();
+  });
+
+  ipcMain.handle("gwen:get-current-conversation", () => brain.getCurrentConversation());
+
+  ipcMain.handle("gwen:new-conversation", (_event, title) => {
+    const conv = brain.newConversation(title);
+    ipc.sendConversation(conv);
+    return conv;
+  });
+
+  ipcMain.handle("gwen:switch-conversation", (_event, id) => {
+    const conv = brain.switchConversation(id);
+    ipc.sendConversation(conv);
+    return conv;
+  });
+
+  ipcMain.handle("gwen:rename-conversation", (_event, id, title) => {
+    const conv = brain.renameConversation(id, title);
+    ipc.sendConversation(conv);
+    return conv;
+  });
+
+  ipcMain.handle("gwen:pin-conversation", (_event, id, pinned) => {
+    const conv = brain.pinConversation(id, pinned);
+    ipc.sendConversation(conv);
+    return conv;
+  });
+
+  ipcMain.handle("gwen:delete-conversation", (_event, id) => {
+    const conv = brain.deleteConversation(id);
+    ipc.sendConversation(conv);
+    return conv;
+  });
+
+  ipcMain.handle("gwen:clear-current-conversation", () => {
+    const conv = brain.clearCurrentConversation();
+    ipc.sendConversation(conv);
+    return conv;
+  });
 
   // Initial-load probes for the left panel (tasks + fixes)
   ipcMain.handle("gwen:get-tasks", async () => {
@@ -188,6 +304,19 @@ app.whenReady().then(async () => {
     }
   });
 
+  ipcMain.handle("gwen:get-home-dashboard", async () => {
+    try {
+      const dashboardMod = await import("../src/skills/dashboard.js");
+      return dashboardMod.getHomeDashboard({
+        state: currentState,
+        conversations: brain.listConversations(),
+      });
+    } catch (err) {
+      console.warn("[gwen] get-home-dashboard failed:", err.message);
+      return null;
+    }
+  });
+
   // Reminder loop
   notify.startReminderLoop();
 
@@ -195,6 +324,11 @@ app.whenReady().then(async () => {
   proactive.startProactiveLoop();
 
   ipc.sendState("idle");
+
+  if (process.env.GWEN_STARTUP_BRIEFING !== "1") {
+    setState("idle");
+    return;
+  }
 
   // Startup briefing — Gwen composes it herself using her tools.
   setState("thinking");

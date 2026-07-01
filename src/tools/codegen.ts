@@ -1,12 +1,29 @@
-// src/tools/codegen.js — spawns Claude Code CLI to build software
+// src/tools/codegen.js — spawns Codex CLI to build software
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { appendSelfBuild } from "../skills/buildLog.js";
+import { sendCodeOutput } from "../skills/ipc.js";
 import * as memoryTool from "./memory.js";
 
 const DEFAULT_BASE = path.join(os.homedir(), "Gwen-projects");
+
+function codexBin() {
+  return process.env.CODEX_CLI_PATH && fs.existsSync(process.env.CODEX_CLI_PATH)
+    ? process.env.CODEX_CLI_PATH
+    : "codex";
+}
+
+function claudeBin() {
+  return process.env.CLAUDE_CLI_PATH && fs.existsSync(process.env.CLAUDE_CLI_PATH)
+    ? process.env.CLAUDE_CLI_PATH
+    : "claude";
+}
+
+function codeAgent() {
+  return (process.env.GWEN_CODE_AGENT || "codex").toLowerCase();
+}
 
 function slugify(text) {
   return text
@@ -44,7 +61,7 @@ export async function run({ request, dir, framework } = {}) {
   const prompt = buildPrompt(request, targetDir, fw);
 
   try {
-    await runClaudeCode(prompt, targetDir);
+    await runCodeAgent(prompt, targetDir);
     const tree = summarizeBuild(targetDir);
     await appendSelfBuild({
       tool: "build_software",
@@ -61,9 +78,9 @@ export async function run({ request, dir, framework } = {}) {
       notes: err.message,
     });
     if (err.code === "ENOENT") {
-      return "Claude Code isn't installed. Run `npm install -g @anthropic-ai/claude-code` first.";
+      return `${codeAgent()} CLI isn't installed or isn't on Gwen's PATH. Update GWEN_CODE_AGENT or the CLI path, then try again.`;
     }
-    return `Claude Code finished with an error: ${err.message}`;
+    return `Codex finished with an error: ${err.message}`;
   }
 }
 
@@ -79,16 +96,69 @@ Requirements:
 - Use the simplest possible solution that satisfies the request`;
 }
 
+function runCodex(prompt, cwd) {
+  return new Promise((resolve, reject) => {
+    let out = "";
+    const cap = (text) => {
+      out += text;
+      if (out.length > 20000) out = out.slice(-20000);
+    };
+    const child = spawn(
+      codexBin(),
+      [
+        "--ask-for-approval",
+        "never",
+        "exec",
+        "--cd",
+        cwd,
+        "--sandbox",
+        "workspace-write",
+        "--color",
+        "never",
+        prompt,
+      ],
+      { cwd, env: process.env }
+    );
+
+    child.stdout.on("data", (d) => {
+      const text = d.toString();
+      cap(text);
+      sendCodeOutput(text);
+    });
+    child.stderr.on("data", (d) => {
+      const text = `[err] ${d.toString()}`;
+      cap(text);
+      sendCodeOutput(text);
+    });
+
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0) resolve();
+      else {
+        const tail =
+          out.trim().split("\n").filter(Boolean).slice(-8).join(" ").slice(-600) ||
+          `exit ${code}`;
+        reject(new Error(tail));
+      }
+    });
+  });
+}
+
+function runCodeAgent(prompt, cwd) {
+  if (codeAgent() === "claude") return runClaudeCode(prompt, cwd);
+  return runCodex(prompt, cwd);
+}
+
 function runClaudeCode(prompt, cwd) {
   return new Promise((resolve, reject) => {
     const child = spawn(
-      "claude",
+      claudeBin(),
       ["--print", "--permission-mode", "acceptEdits", prompt],
       { cwd, env: process.env }
     );
 
-    child.stdout.on("data", () => {});
-    child.stderr.on("data", () => {});
+    child.stdout.on("data", (d) => sendCodeOutput(d.toString()));
+    child.stderr.on("data", (d) => sendCodeOutput(`[err] ${d.toString()}`));
 
     child.on("error", reject);
     child.on("exit", (code) => {

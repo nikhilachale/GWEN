@@ -27,7 +27,7 @@ no bullet points, no headers. Just clear spoken language.
 Today is {DATE}. The user's name is {USER_NAME}.
 
 You have access to the user's calendar, email (read-only), tasks, notes, memory,
-web search, screen, and the ability to build software using Claude Code.
+web search, screen, and the ability to build software using Codex.
 
 Decision rules:
 - If the user asks about time, schedule, or meetings → use get_calendar
@@ -62,7 +62,7 @@ The Orchestrator can call **every tool** registered in `brain.js`:
 | `save_note` / `get_notes` | Notes CRUD |
 | `remember` / `recall` | SQLite memory |
 | `get_day_plan` | Daily briefing synthesis |
-| `build_software` | Spawn Claude Code |
+| `build_software` | Spawn Codex |
 | `get_screen_context` | Screen capture for vision |
 
 Tool definitions live in the `TOOLS` array of `brain.js`. Handlers live in
@@ -135,7 +135,7 @@ ten, lunch with Priya at one, and a deep-work block from three to five."
 **User:** "Build me a CLI todo app in Python."
 **Orchestrator:** [calls `recall("preferred_language")` → calls
 `build_software({ prompt: "...", dir: "~/Gwen-projects/todo-cli" })`] → "On it.
-Spawning Claude Code now — I'll let you know when it's done."
+Spawning Codex now — I'll let you know when it's done."
 
 **User:** "What am I looking at?"
 **Orchestrator:** [calls `get_screen_context()`] → "Looks like you're in VS

@@ -1,19 +1,16 @@
 // src/tools/pdf.ts — extract text from a PDF file using pdfjs-dist.
 import fs from "node:fs/promises";
 import path from "node:path";
-import os from "node:os";
 import { sendDoc } from "../skills/ipc.js";
-
-function resolvePath(input: string) {
-  if (input.startsWith("~")) {
-    return path.join(os.homedir(), input.slice(1).replace(/^\/+/, ""));
-  }
-  return path.resolve(input);
-}
+import { classifyPath, pathDeniedMessage, resolveUserPath } from "../skills/pathPolicy.js";
+import { redactSensitiveText } from "../skills/redaction.js";
 
 export async function readPdf({ path: target, maxChars = 20000 }: { path?: string; maxChars?: number } = {}) {
   if (!target) return "Tell me which PDF to read.";
-  const filePath = resolvePath(target);
+  const filePath = resolveUserPath(target);
+  const policy = classifyPath(filePath);
+  if (!policy.allowed) return pathDeniedMessage(policy, "reading");
+
   try {
     await fs.access(filePath);
   } catch {
@@ -37,7 +34,8 @@ export async function readPdf({ path: target, maxChars = 20000 }: { path?: strin
 
     const trimmed = text.trim();
     if (!trimmed) return `No extractable text in ${path.basename(filePath)} (may be a scanned PDF).`;
-    const out = trimmed.slice(0, maxChars);
+    const redacted = redactSensitiveText(trimmed.slice(0, maxChars));
+    const out = redacted.text;
     // Put the text on the center stage so Miles can read it while Gwen talks.
     sendDoc({ title: path.basename(filePath), text: out, pages: doc.numPages });
     return {
@@ -45,6 +43,8 @@ export async function readPdf({ path: target, maxChars = 20000 }: { path?: strin
       pages: doc.numPages,
       text: out,
       truncated: trimmed.length > maxChars,
+      redacted: redacted.redacted,
+      redactions: redacted.count,
     };
   } catch (err: any) {
     return `Couldn't read ${filePath}: ${err.message}`;

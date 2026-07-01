@@ -1,43 +1,26 @@
 // src/tools/files.js — list and reveal files/folders on the user's Mac.
 import fs from "node:fs/promises";
-import path from "node:path";
-import os from "node:os";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import { classifyPath, pathDeniedMessage, resolveUserPath } from "../skills/pathPolicy.js";
+import { redactSensitiveText } from "../skills/redaction.js";
 
 const execP = promisify(exec);
-
-const SHORTCUTS = {
-  desktop: "~/Desktop",
-  downloads: "~/Downloads",
-  documents: "~/Documents",
-  pictures: "~/Pictures",
-  movies: "~/Movies",
-  music: "~/Music",
-  home: "~",
-  "~": "~",
-};
-
-function resolvePath(input) {
-  if (!input) return path.join(os.homedir(), "Desktop");
-  const key = input.trim().toLowerCase();
-  const expanded = SHORTCUTS[key] || input;
-  if (expanded.startsWith("~")) {
-    return path.join(os.homedir(), expanded.slice(1).replace(/^\/+/, ""));
-  }
-  return path.resolve(expanded);
-}
 
 /**
  * List files and folders at a path.
  * @param {{ path?: string, foldersOnly?: boolean, limit?: number }} input
  */
 export async function listFiles({ path: target, foldersOnly = false, limit = 50 } = {}) {
-  const dir = resolvePath(target);
+  const dir = resolveUserPath(target);
+  const policy = classifyPath(dir);
+  if (!policy.allowed) return pathDeniedMessage(policy, "listing");
+
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     const filtered = entries
       .filter((e) => !e.name.startsWith("."))
+      .filter((e) => classifyPath(`${dir}/${e.name}`).allowed)
       .filter((e) => (foldersOnly ? e.isDirectory() : true))
       .slice(0, limit);
 
@@ -68,17 +51,23 @@ export async function listFiles({ path: target, foldersOnly = false, limit = 50 
  */
 export async function readFile({ path: target, maxChars = 20000 } = {}) {
   if (!target) return "Tell me which file to read.";
-  const filePath = resolvePath(target);
+  const filePath = resolveUserPath(target);
+  const policy = classifyPath(filePath);
+  if (!policy.allowed) return pathDeniedMessage(policy, "reading");
+
   try {
     const stat = await fs.stat(filePath);
     if (stat.isDirectory()) return `${filePath} is a folder, not a file.`;
     const text = await fs.readFile(filePath, "utf8");
     const trimmed = text.length > maxChars ? text.slice(0, maxChars) : text;
+    const redacted = redactSensitiveText(trimmed);
     return {
       path: filePath,
       bytes: stat.size,
-      text: trimmed,
+      text: redacted.text,
       truncated: text.length > maxChars,
+      redacted: redacted.redacted,
+      redactions: redacted.count,
     };
   } catch (err) {
     if (err.code === "ENOENT") return `No file at ${filePath}.`;
@@ -96,7 +85,10 @@ export async function readFile({ path: target, maxChars = 20000 } = {}) {
  */
 export async function openPath({ path: target, reveal = false } = {}) {
   if (!target) return "Tell me which path to open.";
-  const resolved = resolvePath(target);
+  const resolved = resolveUserPath(target);
+  const policy = classifyPath(resolved);
+  if (!policy.allowed) return pathDeniedMessage(policy, reveal ? "revealing" : "opening");
+
   try {
     const flag = reveal ? "-R" : "";
     await execP(`open ${flag} ${shellEscape(resolved)}`);

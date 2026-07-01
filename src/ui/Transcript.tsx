@@ -7,19 +7,39 @@ const MAX_LINES = 50;
 const STICK_THRESHOLD = 40;
 
 export default function Transcript() {
-  const [lines, setLines] = useState([]);
-  const containerRef = useRef(null);
+  const [lines, setLines] = useState<Array<{ id: string; role: string; text: string; ts: number }>>([]);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const stickToBottomRef = useRef(true);
+
+  const fromConversation = (conv: any) =>
+    Array.isArray(conv?.history)
+      ? conv.history.slice(-MAX_LINES).map((m: any, i: number) => ({
+          id: m.id || `${conv.id || "conv"}-${m.ts || i}`,
+          role: m.role,
+          text: m.content,
+          ts: m.ts || (conv.updatedAt || Date.now()) + i,
+        }))
+      : [];
 
   useEffect(() => {
     if (!window.gwenBridge) return;
-    const u1 = window.gwenBridge.onTranscript(({ role, text }) => {
+    window.gwenBridge.getCurrentConversation?.().then((conv) => {
+      setLines(fromConversation(conv));
+    });
+    const u0 = window.gwenBridge.onConversation?.((conv: any) => {
+      setLines(fromConversation(conv));
+    });
+    const u1 = window.gwenBridge.onTranscript(({ role, text }: any) => {
       setLines((prev) => {
-        const next = [...prev, { role, text, ts: Date.now() }];
+        const latest = prev[prev.length - 1];
+        if (latest?.role === role && latest?.text === text) return prev;
+        const ts = Date.now();
+        const next = [...prev, { id: `pending_${role}_${ts}`, role, text, ts }];
         return next.slice(-MAX_LINES);
       });
     });
     return () => {
+      u0 && u0();
       u1 && u1();
     };
   }, []);
@@ -64,7 +84,7 @@ export default function Transcript() {
           const opacity = ageFromTop <= 8 ? 1 : Math.max(0.5, 1 - (ageFromTop - 8) * 0.04);
           return (
             <div
-              key={`${l.ts}-${i}`}
+              key={l.id || `${l.ts}-${i}`}
               style={{
                 ...styles.line,
                 ...(l.role === "user" ? styles.user : styles.assistant),
@@ -85,17 +105,17 @@ export default function Transcript() {
 const styles = {
   wrap: {
     position: "absolute",
-    bottom: 80,
+    bottom: 92,
     left: "50%",
     transform: "translateX(-50%)",
-    width: "100%",
-    maxWidth: 720,
-    maxHeight: "40vh",
+    width: "min(760px, calc(100% - 56px))",
+    maxHeight: "28vh",
     overflowY: "auto",
-    padding: "0 24px",
+    padding: "0 4px",
     display: "flex",
     flexDirection: "column",
     gap: 8,
+    zIndex: 12,
     // Pointer events ON so the user can scroll. Individual lines remain
     // non-interactive (just text), but the container needs to receive
     // wheel/touch events.
@@ -106,8 +126,8 @@ const styles = {
   line: {
     fontSize: 13,
     lineHeight: 1.5,
-    padding: "8px 14px",
-    maxWidth: "70%",
+    padding: "9px 14px",
+    maxWidth: "78%",
     background: "rgba(17, 17, 17, 0.85)",
     border: "1px solid rgba(237, 28, 36, 0.4)",
     backdropFilter: "blur(8px)",
@@ -116,6 +136,7 @@ const styles = {
     clipPath:
       "polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)",
     transition: "opacity 0.4s ease",
+    overflowWrap: "anywhere",
   },
   user: {
     color: "#ffffff",
@@ -132,6 +153,7 @@ const styles = {
     textShadow: "0 0 6px rgba(233, 30, 99, 0.5)",
   },
   role: {
+    display: "inline-block",
     fontSize: 9,
     letterSpacing: "0.3em",
     textTransform: "uppercase",
@@ -142,5 +164,7 @@ const styles = {
     // place to land the Spider-Verse signature without crowding the text.
     textShadow: "-1px 0 0 #E91E63, 1px 0 0 #00B4D8",
   },
-  text: {},
+  text: {
+    wordBreak: "break-word",
+  },
 };

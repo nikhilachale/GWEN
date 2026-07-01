@@ -19,11 +19,15 @@ export function sendTranscript(role, text) {
   safeSend("gwen:transcript", { role, text });
 }
 
+export function sendConversation(conversation) {
+  safeSend("gwen:conversation", conversation);
+}
+
 export function sendAudioLevel(level) {
   safeSend("gwen:audio-level", Math.max(0, Math.min(1, level)));
 }
 
-// Live stdout/stderr stream from Claude Code while Gwen rewrites or rebuilds
+// Live stdout/stderr stream from the coding agent while Gwen rewrites or rebuilds
 // herself (fix_self_code / build_software / repair_self). The SelfFixOverlay
 // renders this so Miles can watch the edits happen in real time.
 export function sendCodeOutput(chunk: string) {

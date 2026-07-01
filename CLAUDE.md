@@ -1,8 +1,8 @@
 # Gwen — JARVIS-Style AI Assistant
-> Claude Code project instructions. Read this fully before touching any file.
+> Project instructions. Read this fully before touching any file.
 
-> ⚠️ **A running Gwen instance rewrites her own source.** `fix_self_code` /
-> `repair_self` spawn the Claude Code CLI against this repo and then
+> ⚠️ **A running Gwen instance rewrites her own source.** `fix_self_code`
+> spawns Codex CLI against this repo; `repair_self` runs maintenance commands and then
 > `relaunch_self` restarts the app. If Gwen is running, your manual edits can
 > be reverted concurrently. Check for a live `electron .` / `npm run dev`
 > process and stop it before editing.
@@ -16,12 +16,12 @@
 - **TypeScript / ESM** — all backend logic, compiled to `dist-electron/` (no Python, no CommonJS source)
 - **React + Vite** — renderer UI (`.tsx`), Vite dev server on `localhost:5174`
 - **Three.js** (+ `@react-three/fiber`) — audio-reactive orb visualization
-- **Claude API** (`@anthropic-ai/sdk`, default `claude-haiku-4-5-20251001`, override `GWEN_BRAIN_MODEL`) — brain + tool_use
+- **Model router** — chooses local/simple, discussion, or smart/tool-capable brain per turn
 - **Speech-to-text** — provider chain: Groq → OpenAI Whisper → local `nodejs-whisper` (whisper.cpp, offline fallback)
 - **Text-to-speech** — provider chain: Fish Audio → ElevenLabs → macOS `say`
 - **Google APIs** — Calendar (read) + Gmail (read-only); calendar also reads macOS Calendar.app
 - **better-sqlite3** — persistent memory store + **`@xenova/transformers`** for local semantic-memory embeddings
-- **Claude Code CLI** — spawned as a subprocess for software builds *and* Gwen's own self-edits
+- **Codex CLI** — spawned as a subprocess for software builds and Gwen's own self-edits
 
 ---
 
@@ -43,7 +43,7 @@ mj-scaffold/
 │   └── preload.cts               ← contextBridge (gwenBridge)
 ├── src/
 │   ├── core/                     ← brain, listener, speaker, wakeword, screen
-│   │   ├── brain.ts              ← Claude orchestrator + tool loop (~1200 lines)
+│   │   ├── brain.ts              ← Gwen orchestrator + tool loop (~1200 lines)
 │   │   ├── listener.ts           ← shim → skills/stt.ts
 │   │   ├── speaker.ts            ← shim → skills/tts.ts
 │   │   ├── wakeword.ts           ← Porcupine "Hey Gwen" (deps not in package.json)
@@ -54,7 +54,7 @@ mj-scaffold/
 │   │                               ambientContext, oauth, sqlite, intent,
 │   │                               buildLog, diffParse, dateParse, storage,
 │   │                               screenshot, search, projectRoot, memoryHygiene
-│   ├── tools/                    ← ~25 Claude-callable tool modules (see registry)
+│   ├── tools/                    ← ~25 brain-callable tool modules (see registry)
 │   ├── ui/                       ← React .tsx: App, Orb, Stage, HUD, SpectrumRing,
 │   │                               SpeedLines, LeftPanel, ActivityFeed,
 │   │                               ContextPanel, Transcript, SelfFixOverlay
@@ -71,14 +71,21 @@ mj-scaffold/
 
 ## ⚙️ Environment Variables (`.env`)
 
-`ANTHROPIC_KEY` is the only hard requirement — every other subsystem degrades
-gracefully. Code reads the **`GWEN_*`** prefix (not `MJ_*`). See `.env.example`
-for the full annotated list.
+Auto routing is the default brain mode. It uses cheap no-LLM fast paths first,
+routes brainstorming/discussion separately from tool-capable turns, and logs
+decisions to `data/model-router.jsonl`. Code reads the **`GWEN_*`** prefix
+(not `MJ_*`). See `.env.example` for the full annotated list.
 
 ```env
-# Core (required)
+# Core
+GWEN_BRAIN_PROVIDER=auto
+GWEN_DEFAULT_PROVIDER=anthropic
+GWEN_DISCUSSION_PROVIDER=anthropic
+GWEN_SMART_PROVIDER=anthropic
+
+# Anthropic cloud mode
 ANTHROPIC_KEY=sk-ant-...
-# GWEN_BRAIN_MODEL=                 # override default claude-haiku-4-5-20251001
+# GWEN_BRAIN_MODEL=claude-haiku-4-5-20251001
 
 # STT (all optional — local whisper.cpp is the fallback)
 # GROQ_KEY=                         # preferred (whisper-large-v3-turbo)
@@ -132,7 +139,7 @@ additionally speaks each sentence as it streams.
 | `gwen:state` | main → renderer | `'idle' \| 'listening' \| 'thinking' \| 'speaking'` |
 | `gwen:transcript` | main → renderer | `{ role, text }` |
 | `gwen:audio-level` | main → renderer | `number 0–1` |
-| `gwen:code-output` | main → renderer | streaming Claude Code stdout |
+| `gwen:code-output` | main → renderer | streaming coding-agent stdout |
 | `gwen:code-diff` | main → renderer | self-edit diff for the Stage |
 | `gwen:doc` | main → renderer | doc/PDF content for center Stage |
 | `gwen:self-fix` | main → renderer | self-fix progress for `SelfFixOverlay` |
@@ -186,7 +193,7 @@ See `agents/AGENTS.md` for full agent specs. Quick summary:
 | `search-agent` | Web search + result summarization |
 | `task-agent` / `notes-agent` / `memory-agent` | Task / note / SQLite-memory logic |
 | `planner-agent` | Synthesizes calendar+tasks into daily plan |
-| `code-agent` | Interfaces with Claude Code CLI |
+| `code-agent` | Interfaces with Codex CLI |
 | `screen-agent` | Captures screen context and describes it |
 
 ---
@@ -205,7 +212,7 @@ See `agents/AGENTS.md` for full agent specs. Quick summary:
 ## 🚫 Hard Rules
 
 1. **Never write to Gmail** — read-only by design
-2. **Never auto-execute** Claude Code build output without showing the user first
+2. **Never auto-execute** Codex build output without showing the user first
 3. **Never store raw email content** in SQLite — only metadata
 4. **Never commit `.env`** or `data/google-token.json`
 5. **Screen capture** only when the user explicitly asks Gwen about their screen

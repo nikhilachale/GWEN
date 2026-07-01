@@ -54,7 +54,7 @@ no bullet points, no headers. Just clear spoken language.
 Today is {DATE}. The user's name is {USER_NAME}.
 
 You have access to the user's calendar, email (read-only), tasks, notes, memory,
-web search, screen, and the ability to build software using Claude Code.
+web search, screen, and the ability to build software using Codex.
 
 Decision rules:
 - If the user asks about time, schedule, or meetings → use get_calendar
@@ -315,23 +315,23 @@ of the day's meetings, (3) top tasks to complete, (4) any overdue items,
 ## 10. Code Agent
 
 **File:** `agents/code-agent/agent.md`
-**Role:** Interfaces with Claude Code CLI to build software
+**Role:** Interfaces with Codex CLI to build software
 **Claude tool name:** `build_software`
 **Scoped system prompt:**
 
 ```
 You are Gwen's software builder. When the user asks to build something, clarify:
 (1) what to build, (2) where to save it (default: ~/Gwen-projects/).
-Then spawn Claude Code with a precise prompt. Stream output back to the user.
+Then spawn Codex with a precise prompt. Stream output back to the user.
 Announce when done and what was created. Never auto-run the built software.
 ```
 
 ### Capabilities
-- `runClaudeCode(prompt, dir)` — spawns `claude --print "{prompt}"` in dir
+- `runCodex(prompt, dir)` — spawns `codex exec --cd "{dir}" "{prompt}"`
 - Streams stdout back via IPC `gwen:code-output` channel
 - Returns summary of what was created
 
-### Claude Code Prompt Template
+### Codex Prompt Template
 ```
 {userRequest}
 

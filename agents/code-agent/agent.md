@@ -1,6 +1,6 @@
 # Code Agent
 
-> Interfaces with the Claude Code CLI to build software on demand.
+> Interfaces with the Codex CLI to build software on demand.
 > Tool name: `build_software` — invoked by the Orchestrator.
 
 ---
@@ -9,7 +9,7 @@
 
 The Code Agent is Gwen's hands. When the user says "build me X", "make me Y",
 or "create a script for Z", the Orchestrator routes to this agent. The Code
-Agent spawns the Claude Code CLI as a subprocess with a precise prompt,
+Agent spawns the Codex CLI as a subprocess with a precise prompt,
 streams its output back to the user via IPC, and announces completion.
 
 It does **not** run the built code. It does **not** install dependencies.
@@ -20,17 +20,17 @@ It only writes files.
 ## System Prompt
 
 Used when the Code Agent is invoked as a standalone Claude call to clarify
-requirements before spawning Claude Code:
+requirements before spawning Codex:
 
 ```
 You are Gwen's software builder. When the user asks to build something, clarify:
 (1) what to build, (2) where to save it (default: ~/Gwen-projects/).
-Then spawn Claude Code with a precise prompt. Stream output back to the user.
+Then spawn Codex with a precise prompt. Stream output back to the user.
 Announce when done and what was created. Never auto-run the built software.
 ```
 
 In practice, the Orchestrator usually has enough context to skip clarification
-— the Code Agent's main job is to compose a strong prompt for Claude Code.
+— the Code Agent's main job is to compose a strong prompt for Codex.
 
 ---
 
@@ -39,7 +39,7 @@ In practice, the Orchestrator usually has enough context to skip clarification
 ```js
 {
   name: "build_software",
-  description: "Spawn Claude Code to build a piece of software based on a prompt.",
+  description: "Spawn Codex to build a piece of software based on a prompt.",
   input_schema: {
     type: "object",
     properties: {
@@ -69,13 +69,13 @@ Implemented in `src/tools/codegen.js`:
 
 | Function | Purpose |
 |---|---|
-| `runClaudeCode(prompt, dir)` | Spawns `claude --print "{prompt}"` in `dir` |
+| `runCodex(prompt, dir)` | Spawns `codex --ask-for-approval never exec --cd "{dir}" "{prompt}"` |
 | `streamOutput(child, ipcChannel)` | Pipes stdout to renderer via `gwen:code-output` |
 | `summarizeBuild(dir)` | Lists files created, returns a tree string |
 
 ---
 
-## Claude Code Prompt Template
+## Codex Prompt Template
 
 ```
 {userRequest}
@@ -100,11 +100,11 @@ or `recall("preferred_language")` — fallback chain before asking the user.
 import { spawn } from "node:child_process";
 import { sendCodeOutput } from "../skills/ipc.js";
 
-export async function runClaudeCode(prompt, dir) {
+export async function runCodex(prompt, dir) {
   await fs.mkdir(dir, { recursive: true });
-  const child = spawn("claude", ["--print", prompt], {
+  const child = spawn("codex", ["--ask-for-approval", "never", "exec", "--cd", dir, "--sandbox", "workspace-write", prompt], {
     cwd: dir,
-    env: { ...process.env, CLAUDE_NONINTERACTIVE: "1" },
+    env: process.env,
   });
   child.stdout.on("data", (d) => sendCodeOutput(d.toString()));
   child.stderr.on("data", (d) => sendCodeOutput(`[err] ${d}`));
@@ -139,7 +139,7 @@ the build log inline below the orb.
 
 **User:** "Build me a CLI todo app in Python."
 **Orchestrator** → `build_software({ request: "CLI todo app", framework: "Python click" })`
-→ "On it. Spawning Claude Code now — I'll let you know when it's done."
+→ "On it. Spawning Codex now — I'll let you know when it's done."
 → [streams build output to UI]
 → "Done. Created seven files in Gwen-projects, including a README and a
 test file. Want me to walk through the structure?"
@@ -152,11 +152,10 @@ test file. Want me to walk through the structure?"
 
 ## Error Handling
 
-- `claude` CLI not found → return: `"Claude Code isn't installed. Run
-  `npm install -g @anthropic-ai/claude-code` first."`
-- Spawn fails → return: `"I couldn't start Claude Code — check the logs."`
+- `codex` CLI not found → return: `"Codex CLI isn't installed. Install Codex first, then try again."`
+- Spawn fails → return: `"I couldn't start Codex — check the logs."`
 - Non-zero exit → still summarize whatever was created, mention exit code
-- Empty output → return: `"Claude Code finished but didn't create any
+- Empty output → return: `"Codex finished but didn't create any
   files — the prompt may have been too vague."`
 
 ---
@@ -165,7 +164,7 @@ test file. Want me to walk through the structure?"
 
 - ❌ **Never run `npm install`** automatically — user must opt in
 - ❌ **Never execute** the built code (no `node`, `python`, no `npm start`, etc.)
-- ❌ Never spawn Claude Code without `cwd` set to the target dir
+- ❌ Never spawn Codex without `cwd` set to the target dir
 - ✅ Always create the target dir if it doesn't exist
 - ✅ Always show a file tree on completion via `summarizeBuild()`
 - ✅ Always confirm save location verbally before spawning if it's ambiguous

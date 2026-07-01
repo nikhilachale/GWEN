@@ -1,7 +1,8 @@
 # Gwen — Personal AI Assistant
 
-Voice-first, always-on AI desktop assistant. Claude does the thinking;
-Fish Audio (or ElevenLabs) does the talking; macOS does the work.
+Voice-first, always-on AI desktop assistant. A model router chooses the cheapest
+capable brain for each turn, Codex handles software builds and self-fixes, Fish
+Audio (or ElevenLabs) does the talking, and macOS does the work.
 
 ## Demo
 
@@ -110,15 +111,15 @@ Vite serves the renderer on `localhost:5174`, Electron picks it up.
 ### Knowledge
 - **Web search** — Tavily
 - **Weather** — current + forecast via wttr.in (no API key)
-- **Screen context** — captures and reasons about what's on your screen
-- **Translation, definitions, math, conversions** — answered directly by Claude
+- **Screen context** — optional cloud vision when configured
+- **Translation, definitions, math, conversions** — answered directly by the configured brain provider
 
 ### Time
 - **Timers** — countdown with macOS notification on fire
 - **Alarms** — natural-language ("tomorrow 7am", "in 90 minutes")
 
 ### Builder
-- **`build_software`** — spawns the Claude Code CLI to scaffold real projects
+- **`build_software`** — spawns the Codex CLI to scaffold real projects
 
 ---
 
@@ -127,7 +128,7 @@ Vite serves the renderer on `localhost:5174`, Electron picks it up.
 - Three.js orb (cyan → white → amber → green by state)
 - Manual mic trigger (click the orb)
 - Speech-to-text — Groq → OpenAI → local whisper.cpp fallback chain
-- Claude tool-use loop with all tools
+- Model router for normal chat, brainstorming, and tool-capable turns
 - Streaming TTS — Fish → ElevenLabs → macOS `say` fallback chain, audio-reactive orb
 - SQLite memory, JSON tasks, markdown notes
 - Tavily search
@@ -139,7 +140,7 @@ Vite serves the renderer on `localhost:5174`, Electron picks it up.
 ## What needs setup
 
 - **Wake word** — Porcupine `.ppn` file at `data/wakewords/hey-gwen.ppn`
-- **Claude Code build pipeline** — works if `claude` CLI is on `$PATH`
+- **Codex build pipeline** — works if `codex` CLI is on `$PATH`
 - **Bluetooth control** — `brew install blueutil`
 - **Phone calls** — paired iPhone with *Calls on Other Devices* enabled
 - **Calendar / Reminders / Notes / Music control** — accept the macOS Automation prompts on first use (System Settings → Privacy & Security → Automation)
@@ -155,7 +156,7 @@ User Voice
 electron/main.ts ──── IPC ──── React UI (Orb + 3-column HUD)
     │
     ├── core/listener.ts  → STT chain:  Groq → OpenAI → local whisper.cpp
-    ├── core/brain.ts     → Claude (orchestrator) → tools/* → returns text
+    ├── core/brain.ts     → model router → brain/tool loop → tools/* → returns text
     └── core/speaker.ts   → TTS chain:  Fish → ElevenLabs → macOS `say`
                             (streamed audio level → orb)
 ```

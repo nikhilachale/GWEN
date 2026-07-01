@@ -1,6 +1,16 @@
 // src/tools/memory.js — long-term memory via SQLite
 import { get, set, del, listAll, listByCategory, search as searchMem } from "../skills/sqlite.js";
 import { embedAndSave } from "../skills/semanticMemory.js";
+import {
+  archiveMemoryV2,
+  deleteMemoryV2,
+  getMemoryV2ByKey,
+  listMemoriesV2,
+  searchMemoriesV2,
+  upsertMemoryV2,
+  type MemoryV2Input,
+  type MemoryV2ListOptions,
+} from "../skills/memoryStore.js";
 
 export async function remember({ key, value, category = "general" } = {}) {
   if (!key) return "I need a key to remember by.";
@@ -25,6 +35,32 @@ export async function listMemories() {
 
 export async function forgetKey(key) {
   return del(key);
+}
+
+export async function rememberTyped(input: MemoryV2Input) {
+  return upsertMemoryV2(input);
+}
+
+export async function recallTyped({ key }: { key?: string } = {}) {
+  if (!key) return null;
+  return getMemoryV2ByKey(key);
+}
+
+export async function listTypedMemories(options: MemoryV2ListOptions = {}) {
+  return listMemoriesV2(options);
+}
+
+export async function searchTypedMemories({ query, limit = 20 }: { query?: string; limit?: number } = {}) {
+  if (!query) return [];
+  return searchMemoriesV2(query, limit);
+}
+
+export async function archiveTypedMemory(key: string) {
+  return archiveMemoryV2(key);
+}
+
+export async function forgetTypedMemory(key: string) {
+  return deleteMemoryV2(key);
 }
 
 export { listByCategory, searchMem as searchMemories };

@@ -10,8 +10,6 @@ import playSoundFactory from "play-sound";
 
 const player = playSoundFactory({});
 const TMP_DIR = "/tmp";
-const VOICE = process.env.GWEN_TTS_VOICE || "Daniel";
-const RATE = process.env.GWEN_TTS_RATE || "185";
 const FISH_ENDPOINT = process.env.FISH_ENDPOINT || "https://api.fish.audio/v1/tts";
 const FISH_LATENCY = process.env.FISH_LATENCY || "balanced";
 
@@ -57,6 +55,16 @@ async function getEleven() {
 let currentChild = null;
 let playQueue = Promise.resolve();
 let counter = 0;
+let fishDisabledReason = "";
+
+class TtsProviderError extends Error {
+  status;
+
+  constructor(provider, status, message) {
+    super(`${provider} ${status}: ${message}`);
+    this.status = status;
+  }
+}
 
 export async function speak(text) {
   return speakStream(text, () => {});
@@ -72,14 +80,23 @@ export async function speakStream(text, onLevel = () => {}) {
     // Open all Fish HTTP requests in parallel; pipe to player serially.
     const fishStreams = chunks.map((chunk) =>
       fishOpenStream(chunk).catch((err) => {
-        console.error("[tts] fish open failed:", err.message);
-        return null;
+        handleFishFailure(err);
+        return synthesize(chunk, fallbackProvider("fish"));
       })
     );
     const playPromise = playQueue.then(async () => {
       for (let i = 0; i < chunks.length; i++) {
-        const stream = await fishStreams[i];
-        if (stream) await pipeStreamToPlayer(stream, onLevel);
+        const result = await fishStreams[i];
+        if (!result) continue;
+        if (isReadable(result)) {
+          await pipeStreamToPlayer(result, onLevel);
+        } else if (result.useSay) {
+          await playSay(chunks[i], onLevel);
+        } else if (result.buffer) {
+          const path = `${TMP_DIR}/mj_out_${counter++}.mp3`;
+          writeFileSync(path, result.buffer);
+          await playFile(path);
+        }
       }
       onLevel(0);
     });
@@ -110,9 +127,25 @@ export async function speakStream(text, onLevel = () => {}) {
 function pickProvider() {
   const forced = (process.env.GWEN_TTS_PROVIDER || "").toLowerCase();
   if (forced === "fish" || forced === "eleven" || forced === "say") return forced;
-  if (process.env.FISH_KEY) return "fish";
+  if (process.env.FISH_KEY && !fishDisabledReason) return "fish";
   if (process.env.ELEVEN_KEY && process.env.ELEVEN_VOICE_ID) return "eleven";
   return "say";
+}
+
+function fallbackProvider(failedProvider) {
+  if (failedProvider !== "eleven" && process.env.ELEVEN_KEY && process.env.ELEVEN_VOICE_ID) return "eleven";
+  return "say";
+}
+
+function handleFishFailure(err) {
+  if (err?.status === 401 || err?.status === 403) {
+    if (!fishDisabledReason) {
+      fishDisabledReason = `auth failed (${err.status})`;
+      console.error(`[tts] fish disabled: ${fishDisabledReason}; falling back to ${fallbackProvider("fish")}`);
+    }
+    return;
+  }
+  console.error("[tts] fish open failed:", err?.message || err);
 }
 
 async function fishOpenStream(text) {
@@ -133,9 +166,13 @@ async function fishOpenStream(text) {
     }),
   });
   if (!res.ok || !res.body) {
-    throw new Error(`fish ${res.status}: ${await res.text().catch(() => "")}`);
+    throw new TtsProviderError("fish", res.status, await res.text().catch(() => ""));
   }
   return Readable.fromWeb(res.body);
+}
+
+function isReadable(value) {
+  return value && typeof value.pipe === "function" && typeof value.on === "function";
 }
 
 function pipeStreamToPlayer(nodeStream, onLevel) {
@@ -209,7 +246,9 @@ function playFile(path) {
 
 function playSay(text, onLevel) {
   return new Promise((resolve) => {
-    currentChild = spawn("say", ["-v", VOICE, "-r", String(RATE), text]);
+    const voice = process.env.GWEN_TTS_VOICE || "Daniel";
+    const rate = process.env.GWEN_TTS_RATE || "185";
+    currentChild = spawn("say", ["-v", voice, "-r", String(rate), text]);
     const pulse = setInterval(() => onLevel(0.4 + Math.random() * 0.4), 100);
     currentChild.on("error", (err) => {
       clearInterval(pulse);

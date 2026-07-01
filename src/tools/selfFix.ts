@@ -1,15 +1,32 @@
-// src/tools/selfFix.js — let Gwen fix her own code via Claude Code CLI.
-// Spawns `claude --print` in this repo's root so the model edits Gwen's source
+// src/tools/selfFix.js — let Gwen fix her own code via Codex CLI.
+// Spawns `codex exec` in this repo's root so the model edits Gwen's source
 // directly.
 //
 // Safety: brain.ts is instructed to confirm with the user before invoking this.
 // All changes are made on the working tree; review with `git diff` and revert
 // with `git restore .` if the fix breaks something.
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import { sendSelfFix, sendCodeOutput, sendCodeDiff } from "../skills/ipc.js";
 import { appendSelfBuild } from "../skills/buildLog.js";
 import { PROJECT_ROOT } from "../skills/projectRoot.js";
 import { relaunchApp } from "../skills/relaunch.js";
+
+function codexBin() {
+  return process.env.CODEX_CLI_PATH && fs.existsSync(process.env.CODEX_CLI_PATH)
+    ? process.env.CODEX_CLI_PATH
+    : "codex";
+}
+
+function claudeBin() {
+  return process.env.CLAUDE_CLI_PATH && fs.existsSync(process.env.CLAUDE_CLI_PATH)
+    ? process.env.CLAUDE_CLI_PATH
+    : "claude";
+}
+
+function codeAgent() {
+  return (process.env.GWEN_CODE_AGENT || "codex").toLowerCase();
+}
 
 export async function run({ description, files, relaunch = true } = {}) {
   if (!description || !description.trim()) {
@@ -20,7 +37,7 @@ export async function run({ description, files, relaunch = true } = {}) {
 
   sendSelfFix(true, "rewriting myself");
   try {
-    await runClaudeCode(prompt, PROJECT_ROOT);
+    await runCodeAgent(prompt, PROJECT_ROOT);
     const diff = await captureGitDiff(PROJECT_ROOT);
     if (diff) sendCodeDiff(diff);
 
@@ -70,7 +87,7 @@ export async function run({ description, files, relaunch = true } = {}) {
       notes: err.message,
     });
     if (err.code === "ENOENT") {
-      return "Claude Code isn't installed. Run npm install -g @anthropic-ai/claude-code first.";
+      return `${codeAgent()} CLI isn't installed or isn't on Gwen's PATH. Update GWEN_CODE_AGENT or the CLI path, then try self-fix again.`;
     }
     return `Self-fix failed: ${err.message}`;
   } finally {
@@ -151,13 +168,63 @@ function stashChanges(cwd) {
   });
 }
 
+function runCodex(prompt, cwd) {
+  return new Promise((resolve, reject) => {
+    let out = "";
+    const cap = (text) => {
+      out += text;
+      if (out.length > 20000) out = out.slice(-20000);
+    };
+    const child = spawn(
+      codexBin(),
+      [
+        "--ask-for-approval",
+        "never",
+        "exec",
+        "--cd",
+        cwd,
+        "--sandbox",
+        "workspace-write",
+        "--color",
+        "never",
+        prompt,
+      ],
+      { cwd, env: process.env }
+    );
+
+    child.stdout.on("data", (d) => {
+      const text = d.toString();
+      cap(text);
+      sendCodeOutput(text);
+    });
+    child.stderr.on("data", (d) => {
+      const text = `[err] ${d.toString()}`;
+      cap(text);
+      sendCodeOutput(text);
+    });
+
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0) resolve();
+      else {
+        const tail =
+          out.trim().split("\n").filter(Boolean).slice(-8).join(" ").slice(-600) ||
+          `exit ${code}`;
+        reject(new Error(tail));
+      }
+    });
+  });
+}
+
+function runCodeAgent(prompt, cwd) {
+  if (codeAgent() === "claude") return runClaudeCode(prompt, cwd);
+  return runCodex(prompt, cwd);
+}
+
 function runClaudeCode(prompt, cwd) {
   return new Promise((resolve, reject) => {
-    // --permission-mode acceptEdits auto-accepts file edits in non-interactive
-    // mode. Without it, Edit/Write tool calls are silently denied and claude
-    // exits 0 having made no changes.
     const child = spawn(
-      "claude",
+      claudeBin(),
       ["--print", "--permission-mode", "acceptEdits", prompt],
       { cwd, env: process.env }
     );

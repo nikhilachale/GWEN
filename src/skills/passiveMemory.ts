@@ -11,8 +11,6 @@ const MIN_CONFIDENCE = 0.75;
 const MIN_USER_CHARS = 12;          // skip "yes", "ok", "thanks"
 const MAX_INJECT_FACTS = 30;        // cap what we put in the system prompt
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
-
 const EXTRACTION_TOOL = {
   name: "save_facts",
   description: "Save durable facts about the user that should persist across conversations.",
@@ -67,7 +65,12 @@ export async function extractAndSaveFacts({
   userInput: string;
   assistantText: string;
 }): Promise<void> {
-  if (!process.env.ANTHROPIC_KEY) return;
+  const memoryProvider = (process.env.GWEN_MEMORY_PROVIDER || "disabled").toLowerCase();
+  const client =
+    memoryProvider === "anthropic" && process.env.ANTHROPIC_KEY
+      ? new Anthropic({ apiKey: process.env.ANTHROPIC_KEY })
+      : null;
+  if (memoryProvider !== "anthropic" || !client) return;
   if (!userInput || userInput.trim().length < MIN_USER_CHARS) return;
 
   try {

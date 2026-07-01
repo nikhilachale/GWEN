@@ -1,6 +1,6 @@
 // src/ui/SelfFixOverlay.tsx — shown while Gwen modifies her own code
 // (fix_self_code) or rebuilds herself (repair_self). Renders the live
-// Claude Code stdout stream and, once the fix lands, the unified git diff
+// coding-agent stdout stream and, once the fix lands, the unified git diff
 // so Miles can watch exactly what changed before the relaunch.
 import React, { useEffect, useRef, useState } from "react";
 
