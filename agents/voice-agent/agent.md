@@ -9,7 +9,7 @@
 
 The Voice Agent is the conductor of Gwen's voice loop. It owns the runtime state
 machine (idle, listening, thinking, speaking), wires Whisper STT to the
-Orchestrator, pipes the Orchestrator's text response to ElevenLabs TTS, and
+Orchestrator, pipes the Orchestrator's text response to Fish Audio TTS, and
 emits IPC events to the renderer so the orb visualization stays in sync.
 
 This is **not** a Claude-backed agent. It has no system prompt. It is a
@@ -51,7 +51,7 @@ plain Node.js coordinator.
 - **listening → thinking**: 1.2s of silence detected, OR 8s max window reached, OR user stops speaking and `node-record-lpcm16` flushes
 - **listening → idle**: Whisper returns empty string `""` (no speech captured)
 - **thinking → speaking**: Orchestrator returns final text; Voice Agent calls `speaker.speakStream(text)`
-- **speaking → idle**: Last audio chunk played, ElevenLabs stream closes
+- **speaking → idle**: Last audio chunk played, Fish stream closes
 - **speaking → listening** (interrupt): wake word detected during TTS — stop playback immediately, return to listening
 
 ---
@@ -69,9 +69,9 @@ export async function listen(maxMs = 8000) { ... }
 ```
 
 ### `core/speaker.js`
-Streams text through ElevenLabs (`ELEVEN_VOICE_ID`), pipes audio chunks to
-`play-sound`, computes RMS audio level per chunk, emits `audioLevel` events
-(0–1) for the orb's particle displacement.
+Streams text through Fish Audio (`FISH_KEY`, optional `FISH_VOICE_ID`), pipes
+audio chunks to the local player, computes an audio level per chunk, and emits
+`audioLevel` events (0–1) for the orb's particle displacement.
 
 ```js
 export async function speakStream(text, onLevel) { ... }
@@ -113,7 +113,7 @@ const TTS_CHUNK_MAX_CHARS  = 500;   // split long responses into sentences
 ## Dependencies (Skills)
 
 - `skill:stt` — Whisper transcription
-- `skill:tts` — ElevenLabs streaming TTS
+- `skill:tts` — Fish Audio streaming TTS
 - `skill:ipc` — Electron IPC helpers
 - (indirectly) `skill:intent` — used by brain.js, not Voice Agent directly
 

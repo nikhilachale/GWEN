@@ -18,7 +18,7 @@
 - **Three.js** (+ `@react-three/fiber`) — audio-reactive orb visualization
 - **Model router** — chooses local/simple, discussion, or smart/tool-capable brain per turn
 - **Speech-to-text** — provider chain: Groq → OpenAI Whisper → local `nodejs-whisper` (whisper.cpp, offline fallback)
-- **Text-to-speech** — provider chain: Fish Audio → ElevenLabs → macOS `say`
+- **Text-to-speech** — Fish Audio only
 - **Google APIs** — Calendar (read) + Gmail (read-only); calendar also reads macOS Calendar.app
 - **better-sqlite3** — persistent memory store + **`@xenova/transformers`** for local semantic-memory embeddings
 - **Codex CLI** — spawned as a subprocess for software builds and Gwen's own self-edits
@@ -91,11 +91,12 @@ ANTHROPIC_KEY=sk-ant-...
 # GROQ_KEY=                         # preferred (whisper-large-v3-turbo)
 # OPENAI_KEY=                       # alternative (whisper-1)
 # GWEN_WHISPER_MODEL=base.en        # local model
+# GWEN_STT_PROVIDER=macos            # local macOS Speech framework testing only
 
-# TTS (all optional — macOS `say` is the fallback)
-# FISH_KEY= / FISH_VOICE_ID=        # preferred
-# ELEVEN_KEY= / ELEVEN_VOICE_ID=    # alternative
-# GWEN_TTS_PROVIDER= / GWEN_TTS_VOICE=Daniel / GWEN_TTS_RATE=185
+# TTS
+FISH_KEY=
+FISH_VOICE_ID=
+GWEN_TTS_PROVIDER=fish               # set to macos only for local `say` testing
 
 # Google (Calendar + Gmail read-only)
 GOOGLE_CLIENT_ID=...

@@ -18,9 +18,7 @@ export type GwenSettings = {
   ollamaUrl: string;
   codeAgent: "codex" | "claude";
   userName: string;
-  ttsProvider: "auto" | "fish" | "eleven" | "say";
-  ttsVoice: string;
-  ttsRate: string;
+  ttsProvider: "fish" | "macos";
   passiveMemory: boolean;
   screenVision: boolean;
   startupBriefing: boolean;
@@ -45,9 +43,7 @@ const DEFAULTS: GwenSettings = {
   ollamaUrl: "http://127.0.0.1:11434",
   codeAgent: "codex",
   userName: "Miles",
-  ttsProvider: "auto",
-  ttsVoice: "Daniel",
-  ttsRate: "185",
+  ttsProvider: "fish",
   passiveMemory: false,
   screenVision: false,
   startupBriefing: false,
@@ -75,8 +71,6 @@ function withEnvDefaults(): GwenSettings {
     codeAgent: (process.env.GWEN_CODE_AGENT as GwenSettings["codeAgent"]) || DEFAULTS.codeAgent,
     userName: process.env.GWEN_USER_NAME || DEFAULTS.userName,
     ttsProvider: (process.env.GWEN_TTS_PROVIDER as GwenSettings["ttsProvider"]) || DEFAULTS.ttsProvider,
-    ttsVoice: process.env.GWEN_TTS_VOICE || DEFAULTS.ttsVoice,
-    ttsRate: process.env.GWEN_TTS_RATE || DEFAULTS.ttsRate,
     passiveMemory: process.env.GWEN_MEMORY_PROVIDER === "anthropic",
     screenVision: process.env.GWEN_VISION_PROVIDER === "anthropic",
     startupBriefing: process.env.GWEN_STARTUP_BRIEFING === "1",
@@ -101,10 +95,15 @@ function nonNegativeNumber(value: unknown, fallback: number) {
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
+function normalizeTtsProvider(value: unknown): GwenSettings["ttsProvider"] {
+  return value === "macos" || value === "fish" ? value : DEFAULTS.ttsProvider;
+}
+
 function normalize(raw: Partial<GwenSettings>): GwenSettings {
   const next = { ...withEnvDefaults(), ...raw };
   return {
     ...next,
+    ttsProvider: normalizeTtsProvider(next.ttsProvider),
     dailyModelBudgetUsd: nonNegativeNumber(next.dailyModelBudgetUsd, DEFAULTS.dailyModelBudgetUsd),
     monthlyModelBudgetUsd: nonNegativeNumber(next.monthlyModelBudgetUsd, DEFAULTS.monthlyModelBudgetUsd),
     modelBudgetWarningPercent: nonNegativeNumber(next.modelBudgetWarningPercent, DEFAULTS.modelBudgetWarningPercent),
@@ -126,8 +125,6 @@ export function applySettingsToEnv(settings: GwenSettings) {
   process.env.GWEN_CODE_AGENT = settings.codeAgent;
   process.env.GWEN_USER_NAME = settings.userName;
   process.env.GWEN_TTS_PROVIDER = settings.ttsProvider;
-  process.env.GWEN_TTS_VOICE = settings.ttsVoice;
-  process.env.GWEN_TTS_RATE = settings.ttsRate;
   process.env.GWEN_MEMORY_PROVIDER = settings.passiveMemory ? "anthropic" : "disabled";
   process.env.GWEN_VISION_PROVIDER = settings.screenVision ? "anthropic" : "disabled";
   process.env.GWEN_STARTUP_BRIEFING = settings.startupBriefing ? "1" : "0";

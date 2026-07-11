@@ -3,13 +3,18 @@
 import recorder from "node-record-lpcm16";
 import fs from "node:fs";
 import { createWriteStream } from "node:fs";
-import { execSync } from "node:child_process";
+import path from "node:path";
+import { execFile, execSync } from "node:child_process";
+import { promisify } from "node:util";
+import { PROJECT_ROOT } from "./projectRoot.js";
 
 const TMP_PATH = "/tmp/gwen_input.wav";
 const SILENCE_THRESHOLD_MS = 1500;
 const SAMPLE_RATE = 16000;
 const MODEL_NAME = process.env.GWEN_WHISPER_MODEL || "base.en";
 const GROQ_MODEL = process.env.GWEN_GROQ_STT_MODEL || "whisper-large-v3-turbo";
+const MACOS_STT_SCRIPT = path.join(PROJECT_ROOT, "scripts/macos-stt.swift");
+const execFileAsync = promisify(execFile);
 
 // Vocabulary biasing — names, apps, and terms Gwen should recognize correctly.
 // Override with GWEN_STT_PROMPT in .env.
@@ -102,6 +107,15 @@ export async function transcribeAudio(maxMs = 15000) {
  * Provider chain: Groq (Whisper-large-v3-turbo) > OpenAI Whisper > local nodejs-whisper.
  */
 export async function transcribeFile(filePath) {
+  if ((process.env.GWEN_STT_PROVIDER || "").toLowerCase() === "macos") {
+    try {
+      return await transcribeMacOSSpeech(filePath);
+    } catch (err) {
+      console.warn("[stt] macos local speech failed:", err.message);
+      return "";
+    }
+  }
+
   if (process.env.GROQ_KEY) {
     try {
       const text = await transcribeGroq(filePath);
@@ -167,6 +181,21 @@ async function transcribeGroq(filePath) {
   }
   const data = await res.json();
   return (data.text || "").trim();
+}
+
+async function transcribeMacOSSpeech(filePath) {
+  if (process.platform !== "darwin") {
+    throw new Error("macos STT provider only works on macOS");
+  }
+  if (!fs.existsSync(MACOS_STT_SCRIPT)) {
+    throw new Error(`macos STT script not found: ${MACOS_STT_SCRIPT}`);
+  }
+
+  const { stdout } = await execFileAsync("swift", [MACOS_STT_SCRIPT, filePath], {
+    timeout: Number(process.env.GWEN_STT_TIMEOUT_SECONDS ?? "30") * 1000 + 5000,
+    maxBuffer: 1024 * 1024,
+  });
+  return (stdout || "").trim();
 }
 
 function cleanWhisperOutput(raw) {

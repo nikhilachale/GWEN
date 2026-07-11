@@ -1,9 +1,10 @@
 // src/skills/health.ts — read-only local readiness snapshot.
 import { execFile } from "node:child_process";
-import { access, stat } from "node:fs/promises";
+import { access, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { PROJECT_ROOT } from "./projectRoot.js";
+import { getPendingConfirmation } from "./security.js";
 import { getSettings } from "./settings.js";
 
 const execFileAsync = promisify(execFile);
@@ -37,31 +38,34 @@ const ENV_KEYS = [
   "GROQ_KEY",
   "FISH_KEY",
   "FISH_VOICE_ID",
-  "ELEVEN_KEY",
-  "ELEVEN_VOICE_ID",
   "TAVILY_KEY",
 ];
 
+const MIN_NODE_MAJOR = 22;
+const SECURITY_AUDIT_PATH = path.join(PROJECT_ROOT, "data/security-audit.jsonl");
+
 export async function getHealthSnapshot(): Promise<HealthSnapshot> {
   const settings = await getSettings();
-  const [node, npm, codex, claude, say, streamPlayer, artifacts] = await Promise.all([
+  const [node, npm, codex, claude, streamPlayer, artifacts, safety] = await Promise.all([
     commandCheck("node", ["--version"], "Node runtime"),
     commandCheck("npm", ["--version"], "npm"),
     commandCheck(process.env.CODEX_CLI_PATH || "codex", ["--version"], "Codex CLI"),
     commandCheck(process.env.CLAUDE_CLI_PATH || "claude", ["--version"], "Claude CLI"),
-    commandCheck("say", ["--version"], "macOS say"),
     firstAvailableCommand(["ffplay", "mpv", "play", "mpg123"], "Streaming audio player"),
     artifactChecks(),
+    safetyChecks(settings),
   ]);
 
   const env = envChecks();
-  const voice = voiceChecks({ settings, say, streamPlayer });
+  const voice = voiceChecks({ settings, streamPlayer });
   const models = modelChecks(settings);
   const codeAgent = codeAgentChecks(settings, codex, claude);
 
   const sections: HealthSection[] = [
+    { id: "readiness", title: "Readiness", checks: [nodeVersionCheck(), ...setupChecklist(settings)] },
     { id: "env", title: "Environment", checks: env },
     { id: "cli", title: "CLIs", checks: [node, npm, codex, claude] },
+    { id: "safety", title: "Safety", checks: safety },
     { id: "artifacts", title: "Build Artifacts", checks: artifacts },
     { id: "voice", title: "Voice", checks: voice },
     { id: "models", title: "Models", checks: models },
@@ -75,12 +79,98 @@ export async function getHealthSnapshot(): Promise<HealthSnapshot> {
   };
 }
 
+function nodeVersionCheck(): HealthCheck {
+  const major = Number(process.versions.node.split(".")[0]);
+  const ok = Number.isFinite(major) && major >= MIN_NODE_MAJOR;
+  return {
+    id: "node-version",
+    label: "Node version",
+    status: ok ? "ok" : "missing",
+    detail: ok
+      ? `${process.version} meets project requirement >= ${MIN_NODE_MAJOR}.12.0`
+      : `${process.version} is too old. Use Node ${MIN_NODE_MAJOR}.12.0 or newer.`,
+  };
+}
+
+function setupChecklist(settings: any): HealthCheck[] {
+  const hasAnthropic = hasEnv("ANTHROPIC_API_KEY") || hasEnv("ANTHROPIC_KEY");
+  const hasFish = hasEnv("FISH_KEY") || settings.ttsProvider === "macos";
+  const hasCloudStt = hasEnv("GROQ_KEY") || hasEnv("OPENAI_API_KEY") || hasEnv("OPENAI_KEY");
+  return [
+    {
+      id: "first-run-brain",
+      label: "Brain setup",
+      status: hasAnthropic || settings.brainProvider === "ollama" ? "ok" : "missing",
+      detail: hasAnthropic ? "Anthropic key loaded" : settings.brainProvider === "ollama" ? "Local Ollama route selected" : "Set ANTHROPIC_KEY or select Ollama",
+    },
+    {
+      id: "first-run-voice",
+      label: "Voice setup",
+      status: hasFish ? "ok" : "missing",
+      detail: hasFish ? `TTS provider: ${settings.ttsProvider}` : "Set FISH_KEY or switch TTS provider to macos",
+    },
+    {
+      id: "first-run-stt",
+      label: "Speech input",
+      status: hasCloudStt ? "ok" : "warn",
+      detail: hasCloudStt ? "Cloud STT configured" : "Will use local Whisper fallback",
+    },
+  ];
+}
+
+async function safetyChecks(settings: any): Promise<HealthCheck[]> {
+  const pending = getPendingConfirmation();
+  const lastAudit = await readLastSecurityAudit();
+  return [
+    {
+      id: "confirm-sensitive-actions",
+      label: "Confirmations",
+      status: settings.confirmSensitiveActions ? "ok" : "warn",
+      detail: settings.confirmSensitiveActions ? "Sensitive and destructive actions require approval" : "Confirmations are disabled",
+    },
+    {
+      id: "safe-demo-mode",
+      label: "Safe demo mode",
+      status: settings.safeMode ? "ok" : "warn",
+      detail: settings.safeMode ? "Destructive tools are blocked" : "Destructive tools can run after confirmation",
+    },
+    {
+      id: "pending-confirmation",
+      label: "Pending action",
+      status: pending ? "warn" : "ok",
+      detail: pending ? `${pending.name}: ${pending.summary}. Required reply: ${pending.requiredText}` : "No action is waiting for approval",
+    },
+    {
+      id: "last-security-audit",
+      label: "Last audit event",
+      status: lastAudit ? auditStatus(lastAudit.action) : "warn",
+      detail: lastAudit
+        ? `${lastAudit.action} ${lastAudit.tool} at ${lastAudit.ts}${lastAudit.summary ? ` - ${lastAudit.summary}` : ""}`
+        : "No security audit events recorded yet",
+    },
+  ];
+}
+
+async function readLastSecurityAudit(): Promise<any | null> {
+  try {
+    const raw = await readFile(SECURITY_AUDIT_PATH, "utf8");
+    const line = raw.trim().split("\n").filter(Boolean).pop();
+    return line ? JSON.parse(line) : null;
+  } catch {
+    return null;
+  }
+}
+
+function auditStatus(action: string): HealthStatus {
+  if (action === "failed" || action === "blocked") return "warn";
+  return "ok";
+}
+
 function envChecks(): HealthCheck[] {
   const hasAnthropic = hasEnv("ANTHROPIC_API_KEY") || hasEnv("ANTHROPIC_KEY");
   const hasOpenAi = hasEnv("OPENAI_API_KEY") || hasEnv("OPENAI_KEY");
   const hasGroq = hasEnv("GROQ_KEY");
   const hasFish = hasEnv("FISH_KEY");
-  const hasEleven = hasEnv("ELEVEN_KEY") && hasEnv("ELEVEN_VOICE_ID");
 
   return [
     {
@@ -103,39 +193,51 @@ function envChecks(): HealthCheck[] {
     },
     {
       id: "cloud-tts",
-      label: "Cloud TTS",
-      status: hasFish || hasEleven ? "ok" : "warn",
-      detail: hasFish ? "Fish key present" : hasEleven ? "ElevenLabs key and voice present" : "Will fall back to macOS say",
+      label: "Fish TTS",
+      status: hasFish ? "ok" : "missing",
+      detail: hasFish ? "Fish key present" : "Set FISH_KEY for normal voice output",
     },
   ];
 }
 
 function voiceChecks({
   settings,
-  say,
   streamPlayer,
 }: {
   settings: any;
-  say: HealthCheck;
   streamPlayer: HealthCheck;
 }): HealthCheck[] {
   const hasCloudStt = hasEnv("GROQ_KEY") || hasEnv("OPENAI_API_KEY") || hasEnv("OPENAI_KEY");
-  const hasCloudTts =
-    (hasEnv("FISH_KEY") && settings.ttsProvider !== "eleven") ||
-    (hasEnv("ELEVEN_KEY") && hasEnv("ELEVEN_VOICE_ID"));
+  const usesMacOsStt = (process.env.GWEN_STT_PROVIDER || "").toLowerCase() === "macos";
+  const macOsSttAvailable = process.platform === "darwin";
+  const hasFish = hasEnv("FISH_KEY");
+  const usesMacOsTts = settings.ttsProvider === "macos";
+  const macOsTtsAvailable = process.platform === "darwin";
 
   return [
     {
       id: "stt",
       label: "Speech to text",
-      status: hasCloudStt ? "ok" : "warn",
-      detail: hasCloudStt ? "Cloud transcription configured" : "Local Whisper fallback may download or require native audio tools",
+      status: usesMacOsStt ? (macOsSttAvailable ? "warn" : "missing") : hasCloudStt ? "ok" : "warn",
+      detail: usesMacOsStt
+        ? macOsSttAvailable
+          ? "Configured provider: macos local testing"
+          : "macos provider only works on macOS"
+        : hasCloudStt
+          ? "Cloud transcription configured"
+          : "Local Whisper fallback may download or require native audio tools",
     },
     {
       id: "tts-provider",
       label: "Text to speech",
-      status: hasCloudTts || say.status === "ok" ? "ok" : "missing",
-      detail: hasCloudTts ? `Configured provider: ${settings.ttsProvider}` : say.detail,
+      status: usesMacOsTts ? (macOsTtsAvailable ? "warn" : "missing") : hasFish ? "ok" : "missing",
+      detail: usesMacOsTts
+        ? macOsTtsAvailable
+          ? "Configured provider: macos local testing"
+          : "macos provider only works on macOS"
+        : hasFish
+          ? "Configured provider: fish"
+          : "Set FISH_KEY or switch to macos for local testing",
     },
     streamPlayer,
   ];

@@ -1,8 +1,9 @@
-// src/skills/tts.js — TTS provider chain: Fish > ElevenLabs > macOS `say`.
-// Fish path streams MP3 bytes directly into a streaming player (ffplay/mpv/sox)
-// so audio starts within ~one chunk of Fish's first response byte.
-// Multiple speak() calls open Fish HTTP requests in parallel, but pipe to the
-// player serially via an internal queue — so synth overlaps with playback.
+// src/skills/tts.js — switchable TTS backends.
+// Fish streams MP3 bytes directly into a streaming player (ffplay/mpv/sox), so
+// audio starts within ~one chunk of Fish's first response byte. macOS uses the
+// built-in `say` command for local speech without a TTS API key.
+// Multiple speak() calls queue playback serially; Fish synthesis can overlap
+// with earlier playback.
 import { spawn, execSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { Readable } from "node:stream";
@@ -44,14 +45,6 @@ function streamArgs(p) {
   }
 }
 
-let _eleven = null;
-async function getEleven() {
-  if (_eleven) return _eleven;
-  const { ElevenLabsClient } = await import("elevenlabs");
-  _eleven = new ElevenLabsClient({ apiKey: process.env.ELEVEN_KEY });
-  return _eleven;
-}
-
 let currentChild = null;
 let playQueue = Promise.resolve();
 let counter = 0;
@@ -74,6 +67,17 @@ export async function speakStream(text, onLevel = () => {}) {
   if (!text || !text.trim()) return;
 
   const provider = pickProvider();
+  if (provider === "macos") {
+    const playPromise = playQueue.then(() => speakWithMacOSSay(text, onLevel));
+    playQueue = playPromise.catch((err) => console.error("[tts] queue:", err.message));
+    return playPromise;
+  }
+
+  if (provider === "fish" && !process.env.FISH_KEY) {
+    console.error("[tts] Fish provider selected but FISH_KEY is not configured.");
+    return;
+  }
+
   const chunks = splitLongText(text, 500);
 
   if (provider === "fish" && STREAM_PLAYER) {
@@ -81,7 +85,7 @@ export async function speakStream(text, onLevel = () => {}) {
     const fishStreams = chunks.map((chunk) =>
       fishOpenStream(chunk).catch((err) => {
         handleFishFailure(err);
-        return synthesize(chunk, fallbackProvider("fish"));
+        return null;
       })
     );
     const playPromise = playQueue.then(async () => {
@@ -90,10 +94,8 @@ export async function speakStream(text, onLevel = () => {}) {
         if (!result) continue;
         if (isReadable(result)) {
           await pipeStreamToPlayer(result, onLevel);
-        } else if (result.useSay) {
-          await playSay(chunks[i], onLevel);
         } else if (result.buffer) {
-          const path = `${TMP_DIR}/mj_out_${counter++}.mp3`;
+          const path = `${TMP_DIR}/mj_out_${counter++}.${result.ext || "mp3"}`;
           writeFileSync(path, result.buffer);
           await playFile(path);
         }
@@ -104,16 +106,14 @@ export async function speakStream(text, onLevel = () => {}) {
     return playPromise;
   }
 
-  // Buffered fallback: Eleven, say, or no streaming player.
+  // Buffered Fish playback when no streaming player is available.
   const synths = chunks.map((c) => synthesize(c, provider));
   const playPromise = playQueue.then(async () => {
     for (let i = 0; i < chunks.length; i++) {
       const result = await synths[i];
       if (!result) continue;
-      if (result.useSay) {
-        await playSay(chunks[i], onLevel);
-      } else if (result.buffer) {
-        const path = `${TMP_DIR}/mj_out_${counter++}.mp3`;
+      if (result.buffer) {
+        const path = `${TMP_DIR}/mj_out_${counter++}.${result.ext || "mp3"}`;
         writeFileSync(path, result.buffer);
         await playFile(path);
       }
@@ -126,22 +126,61 @@ export async function speakStream(text, onLevel = () => {}) {
 
 function pickProvider() {
   const forced = (process.env.GWEN_TTS_PROVIDER || "").toLowerCase();
-  if (forced === "fish" || forced === "eleven" || forced === "say") return forced;
-  if (process.env.FISH_KEY && !fishDisabledReason) return "fish";
-  if (process.env.ELEVEN_KEY && process.env.ELEVEN_VOICE_ID) return "eleven";
-  return "say";
+  if (forced === "macos") return "macos";
+  if (forced && forced !== "fish") {
+    console.warn(`[tts] ignoring unknown GWEN_TTS_PROVIDER=${forced}; using fish.`);
+  }
+  return "fish";
 }
 
-function fallbackProvider(failedProvider) {
-  if (failedProvider !== "eleven" && process.env.ELEVEN_KEY && process.env.ELEVEN_VOICE_ID) return "eleven";
-  return "say";
+function speakWithMacOSSay(text, onLevel) {
+  return new Promise((resolve) => {
+    if (process.platform !== "darwin") {
+      console.warn("[tts] macos provider is only available on macOS.");
+      onLevel(0);
+      resolve();
+      return;
+    }
+
+    const args = [];
+    if (process.env.GWEN_MACOS_VOICE) args.push("-v", process.env.GWEN_MACOS_VOICE);
+    if (process.env.GWEN_MACOS_SAY_RATE) args.push("-r", process.env.GWEN_MACOS_SAY_RATE);
+    args.push(text);
+
+    const proc = spawn("/usr/bin/say", args, {
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    currentChild = proc;
+    let done = false;
+
+    let tick = 0;
+    const pulse = setInterval(() => {
+      tick += 1;
+      onLevel(0.28 + Math.sin(tick / 2) * 0.12);
+    }, 120);
+
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearInterval(pulse);
+      currentChild = null;
+      onLevel(0);
+      resolve();
+    };
+
+    proc.on("error", (err) => {
+      console.warn("[tts] macos say failed:", err.message);
+      finish();
+    });
+    proc.on("close", finish);
+  });
 }
 
 function handleFishFailure(err) {
   if (err?.status === 401 || err?.status === 403) {
     if (!fishDisabledReason) {
       fishDisabledReason = `auth failed (${err.status})`;
-      console.error(`[tts] fish disabled: ${fishDisabledReason}; falling back to ${fallbackProvider("fish")}`);
+      console.error(`[tts] fish disabled: ${fishDisabledReason}`);
     }
     return;
   }
@@ -206,9 +245,8 @@ function pipeStreamToPlayer(nodeStream, onLevel) {
 
 async function synthesize(text, provider) {
   try {
-    if (provider === "fish") return { buffer: await synthFish(text) };
-    if (provider === "eleven") return { buffer: await synthEleven(text) };
-    return { useSay: true };
+    if (provider === "fish") return { buffer: await synthFish(text), ext: "mp3" };
+    return null;
   } catch (err) {
     console.error(`[tts] ${provider} synth failed:`, err.message);
     return null;
@@ -222,43 +260,11 @@ async function synthFish(text) {
   return Buffer.concat(buffers);
 }
 
-async function synthEleven(text) {
-  const client = await getEleven();
-  const audio = await client.textToSpeech.convert(process.env.ELEVEN_VOICE_ID, {
-    text,
-    model_id: "eleven_turbo_v2_5",
-    output_format: "mp3_44100_128",
-  });
-  const buffers = [];
-  for await (const piece of audio) buffers.push(piece);
-  return Buffer.concat(buffers);
-}
-
 function playFile(path) {
   return new Promise((resolve) => {
     currentChild = player.play(path, (err) => {
       currentChild = null;
       if (err) console.warn("[tts] play err:", err.message);
-      resolve();
-    });
-  });
-}
-
-function playSay(text, onLevel) {
-  return new Promise((resolve) => {
-    const voice = process.env.GWEN_TTS_VOICE || "Daniel";
-    const rate = process.env.GWEN_TTS_RATE || "185";
-    currentChild = spawn("say", ["-v", voice, "-r", String(rate), text]);
-    const pulse = setInterval(() => onLevel(0.4 + Math.random() * 0.4), 100);
-    currentChild.on("error", (err) => {
-      clearInterval(pulse);
-      console.warn("[tts] `say` failed (is this macOS?):", err.message);
-      currentChild = null;
-      resolve();
-    });
-    currentChild.on("close", () => {
-      clearInterval(pulse);
-      currentChild = null;
       resolve();
     });
   });

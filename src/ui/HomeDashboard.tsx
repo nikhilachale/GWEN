@@ -17,6 +17,28 @@ type DashboardData = {
     localModel: string;
     tools: string;
   };
+  usage: {
+    todayUsd: number;
+    monthUsd: number;
+    allTimeUsd: number;
+    todayCalls: number;
+    monthCalls: number;
+    allTimeCalls: number;
+    dailyBudgetUsd: number;
+    monthlyBudgetUsd: number;
+    dailyRemainingUsd: number | null;
+    monthlyRemainingUsd: number | null;
+    dailyPercentUsed: number | null;
+    monthlyPercentUsed: number | null;
+    providers: Array<{
+      provider: string;
+      calls: number;
+      inputTokens: number;
+      outputTokens: number;
+      estimatedUsd: number;
+      lastUsedAt: string | null;
+    }>;
+  };
   health: Array<{ id: string; label: string; status: "ok" | "warn" | "placeholder"; detail: string }>;
 };
 
@@ -43,6 +65,21 @@ function statusColor(status: "ok" | "warn" | "placeholder") {
   if (status === "ok") return CYAN;
   if (status === "warn") return RED;
   return MAGENTA;
+}
+
+function money(value: number | null | undefined) {
+  if (value === null || value === undefined) return "NOT SET";
+  if (value === 0) return "$0.00";
+  if (Math.abs(value) < 0.01) return `$${value.toFixed(4)}`;
+  return `$${value.toFixed(2)}`;
+}
+
+function compactNumber(value: number) {
+  return Intl.NumberFormat([], { notation: "compact", maximumFractionDigits: 1 }).format(value || 0).toUpperCase();
+}
+
+function percentText(value: number | null) {
+  return value === null ? "NO LIMIT" : `${value.toFixed(value >= 10 ? 0 : 1)}%`;
 }
 
 export default function HomeDashboard() {
@@ -161,6 +198,29 @@ export default function HomeDashboard() {
           <div style={styles.modelSmall}>LOCAL {data.model.localModel}</div>
         </Panel>
 
+        <Panel title="// API CREDITS" meta={`${data.usage.monthCalls} CALLS`}>
+          <div style={styles.usageGrid}>
+            <UsageMetric label="Today used" value={money(data.usage.todayUsd)} detail={percentText(data.usage.dailyPercentUsed)} />
+            <UsageMetric label="Today balance" value={money(data.usage.dailyRemainingUsd)} detail={money(data.usage.dailyBudgetUsd)} />
+            <UsageMetric label="Month used" value={money(data.usage.monthUsd)} detail={percentText(data.usage.monthlyPercentUsed)} />
+            <UsageMetric label="Month balance" value={money(data.usage.monthlyRemainingUsd)} detail={money(data.usage.monthlyBudgetUsd)} />
+          </div>
+          <div style={styles.providerList}>
+            {data.usage.providers.length === 0 ? (
+              <div style={styles.empty}>No API usage logged yet.</div>
+            ) : (
+              data.usage.providers.slice(0, 3).map((provider) => (
+                <div key={provider.provider} style={styles.providerRow}>
+                  <span style={styles.providerName}>{provider.provider}</span>
+                  <span style={styles.providerMeta}>
+                    {money(provider.estimatedUsd)} · {provider.calls} CALLS · {compactNumber(provider.inputTokens + provider.outputTokens)} TOK
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </Panel>
+
         <Panel title="// HEALTH" meta="PLACEHOLDERS">
           {data.health.map((item) => (
             <div key={item.id} style={styles.healthRow}>
@@ -184,6 +244,16 @@ function Metric({ label, value, tone }: { label: string; value: number; tone: st
   );
 }
 
+function UsageMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div style={styles.usageMetric}>
+      <span style={styles.usageLabel}>{label}</span>
+      <span style={styles.usageValue}>{value}</span>
+      <span style={styles.usageDetail}>{detail}</span>
+    </div>
+  );
+}
+
 function Panel({ title, meta, children }: { title: string; meta: string; children: React.ReactNode }) {
   return (
     <div style={styles.panel}>
@@ -201,7 +271,7 @@ const mono = "'JetBrains Mono', ui-monospace, monospace";
 const styles: Record<string, React.CSSProperties> = {
   wrap: {
     width: "min(820px, calc(100% - 56px))",
-    maxHeight: "36vh",
+    maxHeight: "min(560px, calc(100vh - 150px))",
     marginTop: -10,
     marginBottom: 0,
     padding: 13,
@@ -211,7 +281,7 @@ const styles: Record<string, React.CSSProperties> = {
     backdropFilter: "blur(12px)",
     WebkitBackdropFilter: "blur(12px)",
     pointerEvents: "auto",
-    overflow: "hidden",
+    overflow: "auto",
     zIndex: 5,
   },
   loading: {
@@ -255,7 +325,7 @@ const styles: Record<string, React.CSSProperties> = {
   panelHead: { display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 9px", borderBottom: "1px solid rgba(237, 28, 36, 0.22)" },
   panelTitle: { color: RED, fontSize: 9, letterSpacing: "0.2em", fontFamily: mono, textShadow: CHROMATIC_TEXT_SHADOW },
   panelMeta: { color: MAGENTA, fontSize: 8, letterSpacing: "0.14em", fontFamily: mono, whiteSpace: "nowrap" },
-  panelBody: { padding: 9, display: "flex", flexDirection: "column", gap: 6, minHeight: 58, maxHeight: 96, overflow: "hidden" },
+  panelBody: { padding: 9, display: "flex", flexDirection: "column", gap: 6, minHeight: 58, maxHeight: 132, overflow: "hidden" },
   empty: { color: "rgba(255,255,255,0.5)", fontSize: 11, letterSpacing: "0.08em", lineHeight: 1.4 },
   taskRow: { display: "grid", gridTemplateColumns: "24px 1fr auto", gap: 7, alignItems: "center", minWidth: 0 },
   taskIndex: { color: RED, fontFamily: mono, fontSize: 9, letterSpacing: "0.08em" },
@@ -268,6 +338,22 @@ const styles: Record<string, React.CSSProperties> = {
   modelLabel: { color: CYAN, fontFamily: mono, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase" },
   modelValue: { color: "#fff", fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   modelSmall: { color: "rgba(255,255,255,0.55)", fontFamily: mono, fontSize: 8, letterSpacing: "0.08em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  usageGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 },
+  usageMetric: {
+    minWidth: 0,
+    padding: "6px 7px",
+    border: "1px solid rgba(0, 180, 216, 0.22)",
+    background: "rgba(0, 180, 216, 0.06)",
+    display: "grid",
+    gap: 2,
+  },
+  usageLabel: { color: "rgba(255,255,255,0.58)", fontFamily: mono, fontSize: 7, letterSpacing: "0.1em", textTransform: "uppercase", whiteSpace: "nowrap" },
+  usageValue: { color: "#fff", fontFamily: mono, fontSize: 11, letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  usageDetail: { color: CYAN, fontFamily: mono, fontSize: 7, letterSpacing: "0.08em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  providerList: { display: "grid", gap: 5, marginTop: 2 },
+  providerRow: { display: "grid", gridTemplateColumns: "70px 1fr", gap: 7, alignItems: "center", minWidth: 0 },
+  providerName: { color: MAGENTA, fontFamily: mono, fontSize: 8, letterSpacing: "0.1em", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  providerMeta: { color: "rgba(255,255,255,0.55)", fontFamily: mono, fontSize: 8, letterSpacing: "0.06em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   healthRow: { display: "grid", gridTemplateColumns: "10px 84px 1fr", gap: 7, alignItems: "center", minWidth: 0 },
   healthDot: { width: 7, height: 7, borderRadius: "50%" },
   healthText: { color: "#fff", fontSize: 10, whiteSpace: "nowrap" },

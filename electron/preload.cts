@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld("gwenBridge", {
   getSettings: () => ipcRenderer.invoke("gwen:get-settings"),
   updateSettings: (patch) => ipcRenderer.invoke("gwen:update-settings", patch),
   getHealthSnapshot: () => ipcRenderer.invoke("gwen:get-health-snapshot"),
+  getPendingConfirmation: () => ipcRenderer.invoke("gwen:get-pending-confirmation"),
   getConversations: (query) => ipcRenderer.invoke("gwen:get-conversations", query),
   getCurrentConversation: () => ipcRenderer.invoke("gwen:get-current-conversation"),
   newConversation: (title) => ipcRenderer.invoke("gwen:new-conversation", title),

@@ -96,7 +96,7 @@ IDLE ──(wake word)──▶ LISTENING ──(silence detected)──▶ THIN
 
 ### Key Files
 - `core/listener.js` — records audio, returns transcript string
-- `core/speaker.js` — streams ElevenLabs audio, emits `audioLevel` events
+- `core/speaker.js` — streams Fish Audio, emits `audioLevel` events
 - `core/wakeword.js` — Porcupine always-on loop, emits `'wakeword'` event
 - `electron/main.js` — orchestrates state transitions, fires IPC to renderer
 

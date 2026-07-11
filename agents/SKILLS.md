@@ -34,13 +34,16 @@ async function transcribeFile(filePath: string): Promise<string>
 ```
 
 **Details:**
-- Uses Whisper API (`whisper-1` model via OpenAI SDK)
+- Uses Groq STT when `GROQ_KEY` is configured
+- Falls back to OpenAI Whisper when `OPENAI_KEY` is configured
+- Falls back to local `nodejs-whisper`
+- Local macOS testing can set `GWEN_STT_PROVIDER=macos` to use `scripts/macos-stt.swift`
 - Records via `node-record-lpcm16` at 16kHz mono WAV
-- Saves to temp file `/tmp/mj_input.wav`, cleans up after
+- Saves to temp file `/tmp/gwen_input.wav`, cleans up after
 - Returns empty string `""` if no speech detected (never throws)
 - Silence detection: stops early if >1.2s of silence detected
 
-**Dependencies:** `openai`, `node-record-lpcm16`, `sox` (system binary)
+**Dependencies:** `openai`, `node-record-lpcm16`, `nodejs-whisper`, `sox` (system binary)
 
 ---
 
@@ -57,14 +60,15 @@ async function speakStream(text: string, onChunk: (level: number) => void): Prom
 ```
 
 **Details:**
-- Uses ElevenLabs streaming API
-- Voice ID from `ELEVEN_VOICE_ID` env var
-- Streams audio chunks → `play-sound` for real-time playback
+- Uses Fish Audio streaming API by default
+- API key from `FISH_KEY`; optional voice ID from `FISH_VOICE_ID`
+- Local macOS testing can set `GWEN_TTS_PROVIDER=macos` to use `/usr/bin/say`
+- Streams audio chunks → local player for real-time playback
 - Emits audio level (0–1) on each chunk for orb visualization
 - Splits long text into sentences before sending (max 500 chars/chunk)
 - Handles SSML pauses: `"..."` → 500ms pause, `","` → 100ms
 
-**Dependencies:** `elevenlabs`, `play-sound`
+**Dependencies:** `play-sound`
 
 ---
 

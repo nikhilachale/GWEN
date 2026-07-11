@@ -51,12 +51,31 @@ export function getPendingTool() {
   return pending;
 }
 
+export function getPendingConfirmation() {
+  const next = getPendingTool();
+  if (!next) return null;
+  const risk = classifyTool(next.name);
+  return {
+    id: next.id,
+    name: next.name,
+    risk,
+    summary: next.summary,
+    ageMs: Date.now() - next.createdAt,
+    expiresInMs: Math.max(0, CONFIRM_TTL_MS - (Date.now() - next.createdAt)),
+    requiredText: risk === "destructive" ? requiredConfirmationText(next.name) : "yes",
+  };
+}
+
 export function clearPendingTool() {
   pending = null;
 }
 
-export function isConfirmation(text: string) {
-  return /^(yes|yep|yeah|confirm|confirmed|approve|approved|do it|go ahead|run it|send it|allow)$/i.test(String(text || "").trim());
+export function isConfirmation(text: string, toolName?: string) {
+  const value = String(text || "").trim();
+  if (toolName && classifyTool(toolName) === "destructive") {
+    return value.toLowerCase() === requiredConfirmationText(toolName);
+  }
+  return /^(yes|yep|yeah|confirm|confirmed|approve|approved|do it|go ahead|run it|send it|allow)$/i.test(value);
 }
 
 export function isDenial(text: string) {
@@ -66,10 +85,10 @@ export function isDenial(text: string) {
 export function confirmationPrompt(name: string, input: any, summary: string) {
   const risk = classifyTool(name);
   const detail = summarizeInput(input);
-  const prefix = risk === "destructive"
-    ? "For security, I need explicit confirmation before I control your Mac or send anything."
-    : "For security, I need confirmation before I access private local data.";
-  return `${prefix} Confirm: ${summary}${detail ? ` (${detail})` : ""}.`;
+  if (risk === "destructive") {
+    return `For security, I need exact confirmation before I control your Mac or send anything. Reply "${requiredConfirmationText(name)}" to approve: ${summary}${detail ? ` (${detail})` : ""}.`;
+  }
+  return `For security, I need confirmation before I access private local data. Confirm: ${summary}${detail ? ` (${detail})` : ""}.`;
 }
 
 export async function auditTool(event: {
@@ -107,4 +126,15 @@ function summarizeInput(input: any) {
   if (input.query) parts.push(`query: ${String(input.query).slice(0, 60)}`);
   if (input.title) parts.push(`title: ${String(input.title).slice(0, 60)}`);
   return parts.join(", ");
+}
+
+export function requiredConfirmationText(name: string) {
+  if (name === "send_imessage" || name === "send_whatsapp") return "confirm send";
+  if (name === "facetime" || name === "call_phone") return "confirm call";
+  if (name === "type_text") return "confirm type";
+  if (name === "fix_self_code" || name === "repair_self") return "confirm fix";
+  if (name === "toggle_wifi" || name === "toggle_bluetooth") return "confirm connection";
+  if (name === "lock_screen" || name === "sleep_mac") return "confirm system";
+  if (name === "run_shortcut") return "confirm shortcut";
+  return "confirm action";
 }

@@ -4,7 +4,7 @@ import { RED, CHROMATIC_TEXT_SHADOW, MAGENTA } from "./theme.js";
 const providerOptions = ["anthropic", "ollama"];
 const brainOptions = ["auto", "anthropic", "ollama"];
 const codeOptions = ["codex", "claude"];
-const ttsOptions = ["auto", "fish", "eleven", "say"];
+const ttsOptions = ["fish", "macos"];
 
 export default function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [settings, setSettings] = useState<any>(null);
@@ -65,13 +65,11 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
         <Section title="Assistant">
           <Input label="Your name" value={settings.userName} onChange={(v) => update("userName", v)} />
           <Select label="Voice provider" value={settings.ttsProvider} options={ttsOptions} onChange={(v) => update("ttsProvider", v)} />
-          <Input label="macOS voice" value={settings.ttsVoice} onChange={(v) => update("ttsVoice", v)} />
-          <Input label="Voice rate" value={settings.ttsRate} onChange={(v) => update("ttsRate", v)} />
           <Toggle label="Passive memory" checked={settings.passiveMemory} onChange={(v) => update("passiveMemory", v)} />
           <Toggle label="Screen vision" checked={settings.screenVision} onChange={(v) => update("screenVision", v)} />
           <Toggle label="Startup greeting" checked={settings.startupBriefing} onChange={(v) => update("startupBriefing", v)} />
           <Toggle label="Confirm sensitive actions" checked={settings.confirmSensitiveActions} onChange={(v) => update("confirmSensitiveActions", v)} />
-          <Toggle label="Safe mode" checked={settings.safeMode} onChange={(v) => update("safeMode", v)} />
+          <Toggle label="Safe demo mode" checked={settings.safeMode} onChange={(v) => update("safeMode", v)} />
         </Section>
       </div>
 
@@ -121,10 +119,16 @@ function Select({ label, value, options, onChange }: { label: string; value: str
     <label style={styles.field}>
       <span style={styles.label}>{label}</span>
       <select style={styles.input} value={value || options[0]} onChange={(e) => onChange(e.target.value)}>
-        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+        {options.map((option) => <option key={option} value={option}>{optionLabel(option)}</option>)}
       </select>
     </label>
   );
+}
+
+function optionLabel(option: string) {
+  if (option === "fish") return "gwen";
+  if (option === "macos") return "macOS";
+  return option;
 }
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {

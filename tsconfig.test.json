@@ -4,12 +4,18 @@
     "outDir": "dist-test",
     "noEmit": false,
     "noCheck": true,
-    "sourceMap": false
+    "sourceMap": false,
+    "jsx": "react-jsx"
   },
   "include": [
+    "src/types",
+    "src/core/voicePipeline.ts",
     "src/skills/dateParse.ts",
     "src/skills/intent.ts",
+    "src/skills/conversationJournal.ts",
+    "src/skills/security.ts",
     "src/skills/storage.ts",
+    "src/skills/toolPolicy.ts",
     "src/tools/tasks.ts",
     "tests"
   ],

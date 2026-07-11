@@ -1,5 +1,5 @@
 // electron/main.js — main process, voice state machine, IPC hub
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, ipcMain, shell, globalShortcut } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
@@ -21,6 +21,8 @@ for (const envPath of [
 }
 
 const isDev = process.env.NODE_ENV === "development";
+const GLOBAL_LISTEN_SHORTCUT =
+  process.env.GWEN_GLOBAL_SHORTCUT || "CommandOrControl+Alt+G";
 
 // ─── State ────────────────────────────────────────────────────────────
 let mainWindow = null;
@@ -87,6 +89,22 @@ function createWindow() {
     shell.openExternal(url);
     return { action: "deny" };
   });
+}
+
+function registerGlobalListenShortcut() {
+  const ok = globalShortcut.register(GLOBAL_LISTEN_SHORTCUT, () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    runVoiceTurn();
+  });
+
+  if (ok) {
+    console.log(`[gwen] global listen shortcut registered: ${GLOBAL_LISTEN_SHORTCUT}`);
+  } else {
+    console.warn(`[gwen] failed to register global listen shortcut: ${GLOBAL_LISTEN_SHORTCUT}`);
+  }
 }
 
 // ─── State machine helpers ────────────────────────────────────────────
@@ -186,6 +204,7 @@ async function runTextTurn(text) {
 app.whenReady().then(async () => {
   createWindow();
   await loadCore();
+  registerGlobalListenShortcut();
 
   // Manual trigger from renderer (clicking the orb / mic button)
   ipcMain.on("gwen:trigger", () => {
@@ -212,6 +231,10 @@ app.whenReady().then(async () => {
   ipcMain.handle("gwen:get-health-snapshot", async () => {
     const healthMod = await import("../src/skills/health.js");
     return healthMod.getHealthSnapshot();
+  });
+
+  ipcMain.handle("gwen:get-pending-confirmation", () => {
+    return brain.getPendingConfirmationState();
   });
 
   ipcMain.handle("gwen:get-conversations", (_event, query) => {
@@ -471,4 +494,8 @@ app.on("window-all-closed", () => {
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
 });

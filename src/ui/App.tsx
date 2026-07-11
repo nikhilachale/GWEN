@@ -19,6 +19,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showHealth, setShowHealth] = useState(false);
   const [state, setState] = useState("idle");
+  const [pendingConfirmation, setPendingConfirmation] = useState<any>(null);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setMounted(true));
@@ -30,6 +31,24 @@ export default function App() {
     const unsubscribe = window.gwenBridge?.onState?.((next) => setState(next));
     return () => unsubscribe && unsubscribe();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const next = await window.gwenBridge?.getPendingConfirmation?.();
+        if (!cancelled) setPendingConfirmation(next || null);
+      } catch {
+        if (!cancelled) setPendingConfirmation(null);
+      }
+    };
+    load();
+    const id = window.setInterval(load, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [state]);
 
   const handleTrigger = () => {
     if (window.gwenBridge) window.gwenBridge.triggerListen();
@@ -94,6 +113,15 @@ export default function App() {
       {showConversations && <ConversationPanel onClose={() => setShowConversations(false)} />}
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
       {showHealth && <HealthPanel onClose={() => setShowHealth(false)} />}
+      {pendingConfirmation && (
+        <div style={styles.confirmBanner}>
+          <div style={styles.confirmLabel}>AWAITING CONFIRMATION</div>
+          <div style={styles.confirmSummary}>{pendingConfirmation.summary}</div>
+          <div style={styles.confirmHint}>
+            Reply <strong>{pendingConfirmation.requiredText}</strong>
+          </div>
+        </div>
+      )}
 
       {/* Grid layout: 1fr | 3fr | 1fr */}
       <aside style={styles.leftCol}>
@@ -101,9 +129,9 @@ export default function App() {
       </aside>
 
       <main style={styles.centerCol}>
-        <div style={styles.statusRail}>
+        <div style={{ ...styles.statusRail, top: pendingConfirmation ? 122 : 60 }}>
           <span style={styles.statusDot} />
-          <span>{state.toUpperCase()}</span>
+          <span>{pendingConfirmation ? "AWAITING CONFIRMATION" : state.toUpperCase()}</span>
         </div>
         <div style={styles.stage}>
           <SpectrumRing />
@@ -220,6 +248,37 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
     zIndex: 21,
     pointerEvents: "auto",
+  },
+  confirmBanner: {
+    position: "absolute",
+    top: 58,
+    left: "50%",
+    transform: "translateX(-50%)",
+    width: "min(520px, calc(100vw - 48px))",
+    zIndex: 21,
+    padding: "10px 12px",
+    border: "1px solid rgba(255, 209, 102, 0.72)",
+    background: "rgba(14, 12, 6, 0.94)",
+    boxShadow: "0 0 20px rgba(255, 209, 102, 0.18)",
+    color: "#fff",
+    pointerEvents: "none",
+  },
+  confirmLabel: {
+    color: "#ffd166",
+    fontSize: 10,
+    letterSpacing: "0.2em",
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+  },
+  confirmSummary: {
+    marginTop: 5,
+    fontSize: 12,
+    lineHeight: 1.35,
+    overflowWrap: "anywhere",
+  },
+  confirmHint: {
+    marginTop: 5,
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 11,
   },
   iconButton: {
     height: 34,

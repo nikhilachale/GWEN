@@ -1,5 +1,6 @@
 // src/skills/dashboard.ts — read-only aggregate for the center home dashboard.
 import * as tasksTool from "../tools/tasks.js";
+import type { ModelUsageSummary } from "./modelUsage.js";
 import { getSettings } from "./settings.js";
 
 export type DashboardTask = {
@@ -39,6 +40,7 @@ export type HomeDashboardData = {
     localModel: string;
     tools: string;
   };
+  usage: ModelUsageSummary;
   health: Array<{
     id: string;
     label: string;
@@ -83,7 +85,9 @@ export async function getHomeDashboard(input: {
 } = {}): Promise<HomeDashboardData> {
   const now = new Date();
   const settings = await getSettings();
+  const { getModelUsageSummary } = await import("./modelUsage.js");
   const tasks = readTasks();
+  const usage = await getModelUsageSummary(now);
   const recentChats = (input.conversations || [])
     .slice()
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
@@ -107,6 +111,7 @@ export async function getHomeDashboard(input: {
       localModel: settings.ollamaModel,
       tools: settings.safeMode ? "Safe mode" : "Available",
     },
+    usage,
     health: [
       {
         id: "voice",

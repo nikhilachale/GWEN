@@ -43,6 +43,7 @@ declare global {
       getSettings: () => Promise<any>;
       updateSettings: (patch: any) => Promise<any>;
       getHealthSnapshot: () => Promise<GwenHealthSnapshot>;
+      getPendingConfirmation: () => Promise<any>;
       getConversations: (query?: string) => Promise<any[]>;
       getCurrentConversation: () => Promise<any>;
       newConversation: (title?: string) => Promise<any>;

@@ -2,7 +2,7 @@
 
 Voice-first, always-on AI desktop assistant. A model router chooses the cheapest
 capable brain for each turn, Codex handles software builds and self-fixes, Fish
-Audio (or ElevenLabs) does the talking, and macOS does the work.
+Audio does the talking, and macOS does the work.
 
 ## Demo
 
@@ -17,6 +17,13 @@ https://github.com/user-attachments/assets/26a0933e-3693-482c-96d8-a24dceb88bb8
 ## Quick Start
 
 ### 1. Install system dependencies
+
+Use **Node.js 22.12 or newer**. The repo includes `.nvmrc` and
+`.node-version`; with `nvm`, run:
+
+```bash
+nvm use
+```
 
 **macOS:**
 ```bash
@@ -41,7 +48,9 @@ npm install
 ```
 
 This will run `electron-rebuild` automatically to compile `better-sqlite3`
-against Electron's Node version.
+against Electron's Node version. If tests report a `better-sqlite3` ABI
+mismatch, run `npm run rebuild:node`; if Electron reports one, run
+`npm run rebuild:electron`.
 
 ### 3. Configure environment
 
@@ -50,14 +59,13 @@ cp .env.example .env
 # fill in your API keys
 ```
 
-The only hard requirement is `ANTHROPIC_KEY` — Gwen's brain. Every other
-subsystem has a fallback, so you can run with just that one key:
+The hard requirements are `ANTHROPIC_KEY` for Gwen's brain and `FISH_KEY` for
+Gwen's voice:
 
 - **STT** — `GROQ_KEY` (preferred, `whisper-large-v3-turbo`) or `OPENAI_KEY`
   (`whisper-1`). With neither, Gwen transcribes locally via whisper.cpp
   (`nodejs-whisper`, `base.en`) — no key, fully offline, slower.
-- **TTS** — `FISH_KEY` (+ `FISH_VOICE_ID`, preferred) or `ELEVEN_KEY` +
-  `ELEVEN_VOICE_ID`. With neither, falls back to the built-in macOS `say` voice.
+- **TTS** — Fish Audio only. Set `FISH_KEY` and optionally `FISH_VOICE_ID`.
 - **Google / Tavily / Porcupine** — optional. Calendar reads from macOS
   Calendar.app without OAuth; Gwen degrades gracefully without the rest.
 
@@ -125,9 +133,10 @@ Vite serves the renderer on `localhost:5174`, Electron picks it up.
 
 - Three.js orb (cyan → white → amber → green by state)
 - Manual mic trigger (click the orb)
-- Speech-to-text — Groq → OpenAI → local whisper.cpp fallback chain
+- Global push-to-talk shortcut (`Cmd+Option+G` on macOS by default; set `GWEN_GLOBAL_SHORTCUT` to change it)
+- Speech-to-text — Groq → OpenAI → local whisper.cpp fallback chain; macOS Speech via Swift for local testing
 - Model router for normal chat, brainstorming, and tool-capable turns
-- Streaming TTS — Fish → ElevenLabs → macOS `say` fallback chain, audio-reactive orb
+- Streaming TTS — Fish Audio only, audio-reactive orb
 - SQLite memory, JSON tasks, markdown notes
 - Tavily search
 - macOS Calendar.app (no setup — first run triggers a TCC prompt)
@@ -154,14 +163,15 @@ User Voice
 electron/main.ts ──── IPC ──── React UI (Orb + 3-column HUD)
     │
     ├── core/listener.ts  → STT chain:  Groq → OpenAI → local whisper.cpp
+    │                       (`GWEN_STT_PROVIDER=macos` uses Swift local testing)
     ├── core/brain.ts     → model router → brain/tool loop → tools/* → returns text
-    └── core/speaker.ts   → TTS chain:  Fish → ElevenLabs → macOS `say`
+    └── core/speaker.ts   → TTS: Fish Audio by default; macOS `say` for local testing
                             (streamed audio level → orb)
 ```
 
 Source is TypeScript, compiled to `dist-electron/`. `core/listener.ts` and
-`core/speaker.ts` are thin shims; the real provider-chain logic lives in
-`src/skills/stt.ts` and `src/skills/tts.ts`.
+`core/speaker.ts` are thin shims; STT provider logic lives in
+`src/skills/stt.ts`, while switchable Fish/macOS TTS lives in `src/skills/tts.ts`.
 
 See `agents/AGENTS.md` for the full hub-and-spoke agent topology.
 
@@ -195,6 +205,12 @@ See `agents/AGENTS.md` for the full hub-and-spoke agent topology.
 ## Testing without voice
 
 ```bash
+# Type-check renderer and Electron code
+npm run check
+
+# Run unit tests; this rebuilds better-sqlite3 for the active Node runtime
+npm test
+
 # Test the brain with a typed prompt
 npm run test:brain "What's on my calendar today?"
 
@@ -202,6 +218,14 @@ npm run test:brain "What's on my calendar today?"
 npm run test:tool memory
 npm run test:tool calendar
 ```
+
+## Safety
+
+Sensitive and destructive actions require confirmation by default. Destructive
+actions require exact approval phrases such as `confirm send`, `confirm call`,
+or `confirm type`; Gwen shows the required phrase in the UI when an action is
+pending. Enable Safe demo mode in Settings to block destructive tools while
+keeping chat and safe local tools available.
 
 
 

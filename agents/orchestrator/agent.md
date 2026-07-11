@@ -114,8 +114,8 @@ confidence is below 0.7, the hint is omitted and Claude routes freely.
 
 ## Voice Output Rules
 
-The Orchestrator's final text response is piped directly to ElevenLabs via
-the Voice Agent. Therefore:
+The Orchestrator's final text response is piped directly to Fish Audio via the
+Voice Agent. Therefore:
 
 - ❌ No markdown (`**bold**`, `# headers`, `- bullets`)
 - ❌ No emoji unless the user asked for one
