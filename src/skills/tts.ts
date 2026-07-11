@@ -4,10 +4,12 @@
 // built-in `say` command for local speech without a TTS API key.
 // Multiple speak() calls queue playback serially; Fish synthesis can overlap
 // with earlier playback.
-import { spawn, execSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { spawn, execSync, readFileSync } from "node:child_process";
+import { readFileSync, existsSync } from "node:fs";
 import { Readable } from "node:stream";
 import playSoundFactory from "play-sound";
+import path from "node:path";
+import { PROJECT_ROOT } from "./projectRoot.js";
 
 const player = playSoundFactory({});
 const TMP_DIR = "/tmp";
@@ -50,6 +52,20 @@ let playQueue = Promise.resolve();
 let counter = 0;
 let fishDisabledReason = "";
 
+// Check if text mode is enabled (no TTS)
+function isTextMode(): boolean {
+  try {
+    const settingsPath = path.join(PROJECT_ROOT, "data/settings.json");
+    if (existsSync(settingsPath)) {
+      const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+      return settings.textMode === true;
+    }
+  } catch (err) {
+    console.debug("[tts] could not read settings for textMode:", err);
+  }
+  return false; // Default to voice mode
+}
+
 class TtsProviderError extends Error {
   status;
 
@@ -65,6 +81,12 @@ export async function speak(text) {
 
 export async function speakStream(text, onLevel = () => {}) {
   if (!text || !text.trim()) return;
+
+  // Check text mode - if enabled, skip TTS entirely
+  if (isTextMode()) {
+    console.log("[tts] text mode enabled - skipping TTS");
+    return;
+  }
 
   const provider = pickProvider();
   if (provider === "macos") {

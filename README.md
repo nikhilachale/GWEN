@@ -177,6 +177,59 @@ See `agents/AGENTS.md` for the full hub-and-spoke agent topology.
 
 ---
 
+## How Gwen Works
+
+### Input Methods
+
+1. **Voice mode** — Press `Cmd+Option+G` or click the orb
+2. **Text mode** — Type in the input box and click Send
+3. **Settings** — Toggle "Text mode (quiet)" to disable TTS for silent operation
+
+### Voice Turn Flow
+
+```
+IDLE → LISTENING → THINKING → SPEAKING → IDLE
+  │       │          │         │
+  │       │          │         └─ speaker.speakStream() → Fish Audio/macOS
+  │       │          │             └─ Text mode: skips TTS, shows text only
+  │       │          └─ brain.runBrain()
+  │       │              ├─ Model router: local → discussion → smart
+  │       │              ├─ System prompt: facts + context + memories
+  │       │              └─ Tool loop (max 8): calendar, tasks, search, etc.
+  │       └─ listener.transcribeAudio()
+  │           └─ Groq → OpenAI → local whisper.cpp
+  └─ Trigger: shortcut or orb click
+```
+
+### Text Turn Flow
+
+```
+Type input → Send → THINKING → SPEAKING → IDLE
+                          └─ Same brain flow, no STT step
+```
+
+### Model Routing
+
+Gwen automatically routes to the cheapest capable model:
+
+- **Local fast path** — Time, battery, apps, tasks (no LLM)
+- **Discussion** — Creative talk, brainstorming (Haiku, cheap)
+- **Smart/tools** — Calendar, search, tools (full model)
+
+### Tool Execution
+
+```
+Request → Security check → Tool dispatch → Result → Response
+           │                         │
+    safe/sensitive/        Calendar, Email, Tasks,
+    destructive             Memory, Search, Apps,
+                            System, Music, Maps...
+```
+
+Destructive tools (calls, messaging, system changes) require confirmation.
+
+---
+
 ## Tool reference
 
 | Category | Tools |

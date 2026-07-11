@@ -2,16 +2,20 @@
 import { app, BrowserWindow, ipcMain, shell, globalShortcut } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import dotenv from "dotenv";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// For production, use Application Support directory
+const prodEnvPath = app.getPath("home") + "/Library/Application Support/Gwen/.env";
+
 for (const envPath of [
   join(process.cwd(), ".env"),
   join(__dirname, "../../.env"),
   join(__dirname, "../.env"),
+  prodEnvPath,
 ]) {
   if (existsSync(envPath)) {
     dotenv.config({ path: envPath, override: false });

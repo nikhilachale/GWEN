@@ -65,6 +65,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
         <Section title="Assistant">
           <Input label="Your name" value={settings.userName} onChange={(v) => update("userName", v)} />
           <Select label="Voice provider" value={settings.ttsProvider} options={ttsOptions} onChange={(v) => update("ttsProvider", v)} />
+          <Toggle label="Text mode (quiet)" checked={settings.textMode || false} onChange={(v) => update("textMode", v)} />
           <Toggle label="Passive memory" checked={settings.passiveMemory} onChange={(v) => update("passiveMemory", v)} />
           <Toggle label="Screen vision" checked={settings.screenVision} onChange={(v) => update("screenVision", v)} />
           <Toggle label="Startup greeting" checked={settings.startupBriefing} onChange={(v) => update("startupBriefing", v)} />

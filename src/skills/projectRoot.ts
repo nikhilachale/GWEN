@@ -1,9 +1,11 @@
 // src/skills/projectRoot.ts — resolve the gwen project root regardless of
-// whether this module is running from src/ or compiled into dist-electron/.
-// Walks up the directory tree until it finds a package.json with name "gwen".
+// whether this module is running from src/, compiled into dist-electron/,
+// or packaged as an app (.app bundle).
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { existsSync, mkdirSync } from "node:fs";
+import os from "node:os";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -21,4 +23,25 @@ function find(start) {
   return path.resolve(start, "../..");
 }
 
-export const PROJECT_ROOT = find(here);
+// Detect if running from a packaged .app bundle
+const isPackaged = here.includes("Gwen.app") || process.mainFilename?.includes("Gwen.app");
+
+// For packaged app, use Application Support directory for writable storage
+const appSupportPath = path.join(os.homedir(), "Library/Application Support/Gwen");
+
+let projectRoot = find(here);
+
+if (isPackaged) {
+  // For packaged app, use Application Support directory
+  projectRoot = appSupportPath;
+  // Ensure data directory exists
+  const dataDir = path.join(projectRoot, "data");
+  if (!existsSync(dataDir)) {
+    mkdirSync(dataDir, { recursive: true });
+  }
+  console.log(`[projectRoot] packaged mode: ${projectRoot}`);
+} else {
+  console.log(`[projectRoot] dev mode: ${projectRoot}`);
+}
+
+export const PROJECT_ROOT = projectRoot;

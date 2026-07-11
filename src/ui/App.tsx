@@ -20,6 +20,7 @@ export default function App() {
   const [showHealth, setShowHealth] = useState(false);
   const [state, setState] = useState("idle");
   const [pendingConfirmation, setPendingConfirmation] = useState<any>(null);
+  const [textMode, setTextMode] = useState(false);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setMounted(true));
@@ -49,6 +50,24 @@ export default function App() {
       window.clearInterval(id);
     };
   }, [state]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const settings = await window.gwenBridge?.getSettings?.();
+        if (!cancelled) setTextMode(settings?.textMode || false);
+      } catch {
+        if (!cancelled) setTextMode(false);
+      }
+    };
+    load();
+    const id = window.setInterval(load, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
 
   const handleTrigger = () => {
     if (window.gwenBridge) window.gwenBridge.triggerListen();
@@ -132,6 +151,7 @@ export default function App() {
         <div style={{ ...styles.statusRail, top: pendingConfirmation ? 122 : 60 }}>
           <span style={styles.statusDot} />
           <span>{pendingConfirmation ? "AWAITING CONFIRMATION" : state.toUpperCase()}</span>
+          {textMode && <span style={styles.textModeBadge}>TEXT MODE</span>}
         </div>
         <div style={styles.stage}>
           <SpectrumRing />
@@ -376,5 +396,16 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 999,
     background: "#00B4D8",
     boxShadow: "0 0 10px rgba(0, 180, 216, 0.8)",
+  },
+  textModeBadge: {
+    marginLeft: 12,
+    padding: "2px 8px",
+    fontSize: 9,
+    letterSpacing: "0.12em",
+    fontWeight: 600,
+    color: "#00B4D8",
+    border: "1px solid rgba(0, 180, 216, 0.6)",
+    background: "rgba(0, 180, 216, 0.1)",
+    textShadow: "0 0 6px rgba(0, 180, 216, 0.5)",
   },
 };

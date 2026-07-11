@@ -19,6 +19,7 @@ export type GwenSettings = {
   codeAgent: "codex" | "claude";
   userName: string;
   ttsProvider: "fish" | "macos";
+  textMode: boolean; // When true, Gwen responds with text only (no TTS)
   passiveMemory: boolean;
   screenVision: boolean;
   startupBriefing: boolean;
@@ -44,6 +45,7 @@ const DEFAULTS: GwenSettings = {
   codeAgent: "codex",
   userName: "Miles",
   ttsProvider: "fish",
+  textMode: false, // Default to voice mode (Gwen speaks)
   passiveMemory: false,
   screenVision: false,
   startupBriefing: false,
@@ -99,11 +101,21 @@ function normalizeTtsProvider(value: unknown): GwenSettings["ttsProvider"] {
   return value === "macos" || value === "fish" ? value : DEFAULTS.ttsProvider;
 }
 
+function normalizeBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function normalize(raw: Partial<GwenSettings>): GwenSettings {
   const next = { ...withEnvDefaults(), ...raw };
   return {
     ...next,
     ttsProvider: normalizeTtsProvider(next.ttsProvider),
+    textMode: normalizeBoolean(next.textMode, DEFAULTS.textMode),
+    passiveMemory: normalizeBoolean(next.passiveMemory, DEFAULTS.passiveMemory),
+    screenVision: normalizeBoolean(next.screenVision, DEFAULTS.screenVision),
+    startupBriefing: normalizeBoolean(next.startupBriefing, DEFAULTS.startupBriefing),
+    confirmSensitiveActions: normalizeBoolean(next.confirmSensitiveActions, DEFAULTS.confirmSensitiveActions),
+    safeMode: normalizeBoolean(next.safeMode, DEFAULTS.safeMode),
     dailyModelBudgetUsd: nonNegativeNumber(next.dailyModelBudgetUsd, DEFAULTS.dailyModelBudgetUsd),
     monthlyModelBudgetUsd: nonNegativeNumber(next.monthlyModelBudgetUsd, DEFAULTS.monthlyModelBudgetUsd),
     modelBudgetWarningPercent: nonNegativeNumber(next.modelBudgetWarningPercent, DEFAULTS.modelBudgetWarningPercent),
