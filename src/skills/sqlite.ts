@@ -9,6 +9,21 @@ const LEGACY_DB_PATH = path.join(PROJECT_ROOT, "data/.mj-memory.db");
 
 let db = null;
 
+function applyMigration(database, version: string, description: string, migrate: () => void) {
+  const applied = database
+    .prepare("SELECT 1 FROM schema_migrations WHERE version = ?")
+    .get(version);
+  if (applied) return;
+
+  const run = database.transaction(() => {
+    migrate();
+    database
+      .prepare("INSERT INTO schema_migrations (version, description) VALUES (?, ?)")
+      .run(version, description);
+  });
+  run();
+}
+
 function ensureDb() {
   if (db) return db;
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
@@ -19,6 +34,13 @@ function ensureDb() {
   db = new Database(DB_PATH);
   db.pragma("journal_mode = WAL");
   db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version     TEXT PRIMARY KEY,
+      description TEXT NOT NULL,
+      applied_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  db.exec(`
     CREATE TABLE IF NOT EXISTS memory (
       key        TEXT PRIMARY KEY,
       value      TEXT NOT NULL,
@@ -27,11 +49,15 @@ function ensureDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_memory_category ON memory(category);
   `);
-  // Migration: add embedding BLOB column for semantic recall (Layer 1).
-  const cols = db.prepare("PRAGMA table_info(memory)").all() as Array<{ name: string }>;
-  if (!cols.some((c) => c.name === "embedding")) {
-    db.exec("ALTER TABLE memory ADD COLUMN embedding BLOB");
-  }
+  db.prepare(
+    "INSERT OR IGNORE INTO schema_migrations (version, description) VALUES (?, ?)"
+  ).run("000_memory_base", "Create base memory table and category index");
+  applyMigration(db, "001_memory_embedding", "Add semantic recall embedding column", () => {
+    const cols = db.prepare("PRAGMA table_info(memory)").all() as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === "embedding")) {
+      db.exec("ALTER TABLE memory ADD COLUMN embedding BLOB");
+    }
+  });
   return db;
 }
 

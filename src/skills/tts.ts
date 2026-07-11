@@ -180,21 +180,26 @@ function speakWithMacOSSay(text, onLevel) {
       tick += 1;
       onLevel(0.28 + Math.sin(tick / 2) * 0.12);
     }, 120);
+    const killChild = () => {
+      if (proc.exitCode == null && !proc.killed) proc.kill("SIGTERM");
+    };
 
     const finish = () => {
       if (done) return;
       done = true;
       clearInterval(pulse);
-      currentChild = null;
+      process.off("exit", killChild);
+      if (currentChild === proc) currentChild = null;
       onLevel(0);
       resolve();
     };
+    process.once("exit", killChild);
 
-    proc.on("error", (err) => {
+    proc.once("error", (err) => {
       console.warn("[tts] macos say failed:", err.message);
       finish();
     });
-    proc.on("close", finish);
+    proc.once("close", finish);
   });
 }
 

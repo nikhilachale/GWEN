@@ -1,10 +1,10 @@
 // src/tools/macControl.js — open Mac apps, type text, send messages.
 // macOS only. Requires Accessibility permission for `type_text`/`send_*`
 // (System Settings → Privacy & Security → Accessibility → enable Terminal/Electron).
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-const execP = promisify(exec);
+const execFileP = promisify(execFile);
 
 // Friendly aliases → real macOS app names. Extend as needed.
 const APP_ALIASES = {
@@ -42,11 +42,15 @@ export async function openApp({ name, path } = {}) {
   if (!name && !path) return "Tell me which app to open.";
   const app = resolveApp(name);
   try {
-    if (path) {
-      await execP(`open -a ${shellEscape(app)} ${shellEscape(path)}`);
+    if (path && app) {
+      await execFileP("open", ["-a", app, path]);
       return `Opened ${path} in ${app}.`;
     }
-    await execP(`open -a ${shellEscape(app)}`);
+    if (path) {
+      await execFileP("open", [path]);
+      return `Opened ${path}.`;
+    }
+    await execFileP("open", ["-a", app]);
     return `Opened ${app}.`;
   } catch (err) {
     return `Couldn't open ${app}: ${err.message}`;
@@ -153,19 +157,17 @@ async function resolveImessageHandle(contact) {
 export async function sendWhatsApp({ contact, message, draftOnly = false } = {}) {
   if (!contact || !message) return "Need a contact and a message.";
   await openApp({ name: "WhatsApp" });
-  await sleep(1200);
+  const ready = await waitForAppReady("WhatsApp");
+  if (!ready) {
+    return "WhatsApp didn't become ready for automation. Make sure it is installed and Accessibility permission is granted.";
+  }
   try {
-    await runAppleScript(`tell application "System Events"
-      keystroke "f" using {command down}
-      delay 0.4
-      keystroke ${asAppleString(contact)}
-      delay 0.7
-      key code 36
-      delay 0.4
-      keystroke ${asAppleString(message)}
-    end tell`);
+    await runAppleScript(`tell application "System Events" to keystroke "f" using {command down}`);
+    await pasteText(contact);
+    await runAppleScript(`tell application "System Events" to key code 36`);
+    await waitForAppReady("WhatsApp", 2000);
+    await pasteText(message);
     if (!draftOnly) {
-      await sleep(200);
       await runAppleScript(`tell application "System Events" to key code 36`);
       return `Sent WhatsApp to ${contact}.`;
     }
@@ -189,7 +191,7 @@ export async function scrollMouse({ direction = "down", amount = 5 } = {}) {
 var e = $.CGEventCreateScrollWheelEvent($(), 1, 1, ${delta});
 $.CGEventPost(0, e);`;
   try {
-    await execP(`osascript -l JavaScript -e ${shellEscape(script)}`);
+    await execFileP("osascript", ["-l", "JavaScript", "-e", script]);
     return `Scrolled ${dir} ${ticks}.`;
   } catch (err) {
     return `Couldn't scroll: ${err.message} (Accessibility permission required.)`;
@@ -198,9 +200,41 @@ $.CGEventPost(0, e);`;
 
 // ─── helpers ─────────────────────────────────────────────────────────
 
+async function waitUntil(
+  check: () => Promise<boolean>,
+  timeoutMs = 5000,
+  intervalMs = 100
+) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await check()) return true;
+    await sleep(intervalMs);
+  }
+  return false;
+}
+
+async function waitForAppReady(appName: string, timeoutMs = 5000) {
+  return waitUntil(async () => {
+    try {
+      const result = await runAppleScript(`tell application "System Events"
+        if not (exists process ${asAppleString(appName)}) then return false
+        return frontmost of process ${asAppleString(appName)}
+      end tell`);
+      return result === "true";
+    } catch {
+      return false;
+    }
+  }, timeoutMs);
+}
+
+async function pasteText(text: string) {
+  await runAppleScript(`set the clipboard to ${asAppleString(text)}
+tell application "System Events" to keystroke "v" using {command down}`);
+}
+
 function runAppleScript(script) {
   return new Promise((resolve, reject) => {
-    const child = exec(`osascript -e ${shellEscape(script)}`, (err, stdout) => {
+    const child = execFile("osascript", ["-e", script], (err, stdout) => {
       if (err) reject(err);
       else resolve(stdout.trim());
     });
@@ -209,9 +243,10 @@ function runAppleScript(script) {
 }
 
 function asAppleString(s) {
-  return `"${String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-}
-
-function shellEscape(s) {
-  return `'${String(s).replace(/'/g, "'\\''")}'`;
+  return `"${String(s)
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n")
+    .replace(/\t/g, "\\t")}"`;
 }

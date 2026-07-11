@@ -1,5 +1,6 @@
 // src/tools/files.js — list and reveal files/folders on the user's Mac.
 import fs from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { classifyPath, pathDeniedMessage, resolveUserPath } from "../skills/pathPolicy.js";
@@ -58,14 +59,26 @@ export async function readFile({ path: target, maxChars = 20000 } = {}) {
   try {
     const stat = await fs.stat(filePath);
     if (stat.isDirectory()) return `${filePath} is a folder, not a file.`;
-    const text = await fs.readFile(filePath, "utf8");
-    const trimmed = text.length > maxChars ? text.slice(0, maxChars) : text;
+    const charLimit = Math.max(0, Math.floor(Number(maxChars) || 0));
+    const bytesToRead = Math.min(stat.size, Math.max(charLimit * 4, charLimit));
+    const handle = await fs.open(filePath, fsConstants.O_RDONLY);
+    let text = "";
+    let bytesRead = 0;
+    try {
+      const buffer = Buffer.alloc(bytesToRead);
+      const result = await handle.read(buffer, 0, bytesToRead, 0);
+      bytesRead = result.bytesRead;
+      text = buffer.subarray(0, bytesRead).toString("utf8");
+    } finally {
+      await handle.close();
+    }
+    const trimmed = text.length > charLimit ? text.slice(0, charLimit) : text;
     const redacted = redactSensitiveText(trimmed);
     return {
       path: filePath,
       bytes: stat.size,
       text: redacted.text,
-      truncated: text.length > maxChars,
+      truncated: stat.size > bytesRead || text.length > charLimit,
       redacted: redacted.redacted,
       redactions: redacted.count,
     };

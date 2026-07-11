@@ -21,7 +21,7 @@ import {
   circuitReply,
   handlePendingConfirmation,
 } from "./toolDispatcher.js";
-import { tryLocalFastPath } from "./localFastPath.js";
+import { tryLocalFastPath as tryLocalFastPathImpl } from "./localFastPath.js";
 
 const MODEL = process.env.GWEN_BRAIN_MODEL || "claude-haiku-4-5-20251001";
 const MAX_TOOL_TURNS = 8;
@@ -76,6 +76,83 @@ function usageMetadata(route: any, userInput: string, messages: any[], phase: st
     inputChars: String(userInput || "").length,
     messageCount: Array.isArray(messages) ? messages.length : 0,
   };
+}
+
+async function prepareBrainTurn(userInput: string, opts: Record<string, any>) {
+  const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Miles";
+  const userNickname = await safeRecall("user_nickname");
+  const ambient = opts.skipAmbient ? null : await getAmbientContext().catch(() => null);
+  const relevantBlock = await formatRelevantBlock(userInput).catch(() => "");
+  const messages = [
+    ...ConversationManager.getHistoryForTurn(MAX_MODEL_HISTORY_MESSAGES),
+    { role: "user", content: userInput },
+  ];
+  const route = chooseBrainRoute(userInput, {
+    intentHint: opts.intentHint,
+    hasAnthropic: !!process.env.ANTHROPIC_KEY,
+    hasOllama: true,
+    allowTools: !opts.noTools,
+  });
+  sendActivity({
+    kind: "info",
+    summary: `Model route: ${route.tier}`,
+    detail: `${route.provider}/${route.model} — ${route.reason}${route.toolsEnabled ? " with tools" : ""}`,
+  });
+  logBrainRoute(route, userInput).catch(() => {});
+  return {
+    userName,
+    userNickname,
+    ambient,
+    relevantBlock,
+    messages,
+    route,
+    system: buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint, ambient, relevantBlock }),
+    localSystem: buildOllamaSystemPrompt({ userName, userNickname, ambient, relevantBlock }),
+    client: process.env.ANTHROPIC_KEY ? new Anthropic({ apiKey: process.env.ANTHROPIC_KEY }) : null,
+  };
+}
+
+async function recordReply(
+  userInput: string,
+  assistantText: string,
+  opts: Record<string, any>,
+  extractFacts = false
+) {
+  if (opts.skipHistory) return;
+  await ConversationManager.recordExchange(userInput, assistantText);
+  if (extractFacts) {
+    extractAndSaveFacts({ userInput, assistantText }).catch(() => {});
+  }
+}
+
+function emitSentences(text: string, onSentence: (sentence: string) => void) {
+  for (const sentence of text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text]) {
+    const trimmed = sentence.trim();
+    if (trimmed) onSentence(trimmed);
+  }
+}
+
+async function runToolUses(toolUses: any[]) {
+  return Promise.all(
+    toolUses.map(async (tu) => {
+      try {
+        const result = await dispatchTool(tu.name, tu.input || {}, handlers);
+        return {
+          type: "tool_result",
+          tool_use_id: tu.id,
+          content: result,
+        };
+      } catch (err: any) {
+        console.error(`[brain] tool ${tu.name} failed:`, err);
+        return {
+          type: "tool_result",
+          tool_use_id: tu.id,
+          content: `Error running ${tu.name}: ${err.message}`,
+          is_error: true,
+        };
+      }
+    })
+  );
 }
 
 async function runOllamaChat(opts: {
@@ -133,36 +210,15 @@ export async function runBrain(userInput: string, opts: Record<string, any> = {}
   const pendingResult = await handlePendingConfirmation(userInput, handlers, opts);
   if (pendingResult.handled) {
     const reply = pendingResult.reply || "";
-    if (!opts.skipHistory) await ConversationManager.recordExchange(userInput, reply);
+    await recordReply(userInput, reply, opts);
     return reply;
   }
 
-  const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Miles";
-  const userNickname = await safeRecall("user_nickname");
-  const ambient = opts.skipAmbient ? null : await getAmbientContext().catch(() => null);
-  const relevantBlock = await formatRelevantBlock(userInput).catch(() => "");
-  const system = buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint, ambient, relevantBlock });
-
-  const messages = [...ConversationManager.getHistoryForTurn(MAX_MODEL_HISTORY_MESSAGES), { role: "user", content: userInput }];
-  const route = chooseBrainRoute(userInput, {
-    intentHint: opts.intentHint,
-    hasAnthropic: !!process.env.ANTHROPIC_KEY,
-    hasOllama: true,
-    allowTools: !opts.noTools,
-  });
-  sendActivity({
-    kind: "info",
-    summary: `Model route: ${route.tier}`,
-    detail: `${route.provider}/${route.model} — ${route.reason}${route.toolsEnabled ? " with tools" : ""}`,
-  });
-  logBrainRoute(route, userInput).catch(() => {});
-
-  const client = process.env.ANTHROPIC_KEY ? new Anthropic({ apiKey: process.env.ANTHROPIC_KEY }) : null;
+  const { route, client, system, localSystem, messages } = await prepareBrainTurn(userInput, opts);
 
   if (route.provider === "ollama") {
-    const localSystem = buildOllamaSystemPrompt({ userName, userNickname, ambient, relevantBlock });
     const finalText = await runOllamaChat({ system: localSystem, messages, route, userInput });
-    if (!opts.skipHistory) await ConversationManager.recordExchange(userInput, finalText);
+    await recordReply(userInput, finalText, opts);
     return finalText;
   }
 
@@ -188,26 +244,7 @@ export async function runBrain(userInput: string, opts: Record<string, any> = {}
   const circuit = makeToolCircuit();
   while (route.toolsEnabled && response.stop_reason === "tool_use" && turn < MAX_TOOL_TURNS) {
     const toolUses = response.content.filter((b) => b.type === "tool_use");
-    const toolResults = await Promise.all(
-      toolUses.map(async (tu) => {
-        try {
-          const result = await dispatchTool(tu.name, tu.input || {}, handlers);
-          return {
-            type: "tool_result",
-            tool_use_id: tu.id,
-            content: result,
-          };
-        } catch (err) {
-          console.error(`[brain] tool ${tu.name} failed:`, err);
-          return {
-            type: "tool_result",
-            tool_use_id: tu.id,
-            content: `Error running ${tu.name}: ${err.message}`,
-            is_error: true,
-          };
-        }
-      })
-    );
+    const toolResults = await runToolUses(toolUses);
 
     messages.push({ role: "assistant", content: response.content });
     messages.push({ role: "user", content: toolResults });
@@ -216,7 +253,7 @@ export async function runBrain(userInput: string, opts: Record<string, any> = {}
     if (tripped) {
       console.warn(`[brain] circuit breaker: ${tripped} after ${turn + 1} tool turn(s)`);
       const reply = circuitReply(toolResults, tripped);
-      if (!opts.skipHistory) await ConversationManager.recordExchange(userInput, reply);
+      await recordReply(userInput, reply, opts);
       return reply;
     }
 
@@ -239,11 +276,7 @@ export async function runBrain(userInput: string, opts: Record<string, any> = {}
 
   const textBlock = response.content.find((b) => b.type === "text");
   const finalText = textBlock ? textBlock.text : "I'm not sure how to respond to that.";
-  if (!opts.skipHistory) {
-    await ConversationManager.recordExchange(userInput, finalText);
-    // Fire-and-forget passive memory extraction. Never blocks the speech loop.
-    extractAndSaveFacts({ userInput, assistantText: finalText }).catch(() => {});
-  }
+  await recordReply(userInput, finalText, opts, true);
   return finalText;
 }
 
@@ -265,46 +298,23 @@ export async function runBrainStream(
   if (pendingResult.handled) {
     const reply = pendingResult.reply || "";
     onSentence(reply);
-    if (!opts.skipHistory) await ConversationManager.recordExchange(userInput, reply);
+    await recordReply(userInput, reply, opts);
     return reply;
   }
 
-  const userName = (await safeRecall("user_name")) || process.env.GWEN_USER_NAME || "Miles";
-  const userNickname = await safeRecall("user_nickname");
-  const ambient = opts.skipAmbient ? null : await getAmbientContext().catch(() => null);
-  const relevantBlock = await formatRelevantBlock(userInput).catch(() => "");
-  const system = buildSystemPrompt({ userName, userNickname, intentHint: opts.intentHint, ambient, relevantBlock });
-  const messages = [...ConversationManager.getHistoryForTurn(MAX_MODEL_HISTORY_MESSAGES), { role: "user", content: userInput }];
-  const route = chooseBrainRoute(userInput, {
-    intentHint: opts.intentHint,
-    hasAnthropic: !!process.env.ANTHROPIC_KEY,
-    hasOllama: true,
-    allowTools: !opts.noTools,
-  });
-  sendActivity({
-    kind: "info",
-    summary: `Model route: ${route.tier}`,
-    detail: `${route.provider}/${route.model} — ${route.reason}${route.toolsEnabled ? " with tools" : ""}`,
-  });
-  logBrainRoute(route, userInput).catch(() => {});
-
-  const client = process.env.ANTHROPIC_KEY ? new Anthropic({ apiKey: process.env.ANTHROPIC_KEY }) : null;
+  const { route, client, system, localSystem, messages } = await prepareBrainTurn(userInput, opts);
 
   if (route.provider === "ollama") {
-    const localSystem = buildOllamaSystemPrompt({ userName, userNickname, ambient, relevantBlock });
     const finalText = await runOllamaChat({ system: localSystem, messages, route, userInput });
-    for (const sentence of finalText.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [finalText]) {
-      const trimmed = sentence.trim();
-      if (trimmed) onSentence(trimmed);
-    }
-    if (!opts.skipHistory) await ConversationManager.recordExchange(userInput, finalText);
+    emitSentences(finalText, onSentence);
+    await recordReply(userInput, finalText, opts);
     return finalText;
   }
 
   if (route.provider !== "anthropic" || !client) {
     const msg = "I don't have a usable brain provider configured for that yet. Set ANTHROPIC_KEY for the smart brain, or enable an available local fallback.";
     onSentence(msg);
-    if (!opts.skipHistory) await ConversationManager.recordExchange(userInput, msg);
+    await recordReply(userInput, msg, opts);
     return msg;
   }
 
@@ -312,7 +322,7 @@ export async function runBrainStream(
   let turn = 0;
   const circuit = makeToolCircuit();
 
-  while (turn <= MAX_TOOL_TURNS) {
+  while (turn < MAX_TOOL_TURNS) {
     const streamOpts: any = {
       model: route.model || MODEL,
       max_tokens: 1024,
@@ -354,34 +364,12 @@ export async function runBrainStream(
     }
 
     if (!route.toolsEnabled || finalMessage.stop_reason !== "tool_use") {
-      if (!opts.skipHistory) {
-        await ConversationManager.recordExchange(userInput, fullText);
-        extractAndSaveFacts({ userInput, assistantText: fullText }).catch(() => {});
-      }
+      await recordReply(userInput, fullText, opts, true);
       return fullText;
     }
 
     const toolUses = finalMessage.content.filter((b) => b.type === "tool_use");
-    const toolResults = await Promise.all(
-      toolUses.map(async (tu) => {
-        try {
-          const result = await dispatchTool(tu.name, tu.input || {}, handlers);
-          return {
-            type: "tool_result",
-            tool_use_id: tu.id,
-            content: result,
-          };
-        } catch (err) {
-          console.error(`[brain] tool ${tu.name} failed:`, err);
-          return {
-            type: "tool_result",
-            tool_use_id: tu.id,
-            content: `Error running ${tu.name}: ${err.message}`,
-            is_error: true,
-          };
-        }
-      })
-    );
+    const toolResults = await runToolUses(toolUses);
 
     messages.push({ role: "assistant", content: finalMessage.content });
     messages.push({ role: "user", content: toolResults });
@@ -392,20 +380,14 @@ export async function runBrainStream(
       const reply = circuitReply(toolResults, tripped);
       onSentence(reply);
       const out = fullText ? `${fullText} ${reply}` : reply;
-      if (!opts.skipHistory) {
-        await ConversationManager.recordExchange(userInput, out);
-        extractAndSaveFacts({ userInput, assistantText: out }).catch(() => {});
-      }
+      await recordReply(userInput, out, opts, true);
       return out;
     }
     turn++;
   }
 
   const safeText = fullText || "I'm not sure how to respond to that.";
-  if (!opts.skipHistory) {
-    await ConversationManager.recordExchange(userInput, safeText);
-    extractAndSaveFacts({ userInput, assistantText: safeText }).catch(() => {});
-  }
+  await recordReply(userInput, safeText, opts, true);
   return safeText;
 }
 
@@ -414,7 +396,7 @@ export async function runBrainStream(
  * Returns null when the turn needs the full LLM.
  */
 export async function tryLocalFastPath(userInput: string, opts: Record<string, any> = {}): Promise<string | null> {
-  return tryLocalFastPath(userInput, { handlers }, opts);
+  return tryLocalFastPathImpl(userInput, { handlers }, opts);
 }
 
 // Re-export conversation manager functions for backward compatibility

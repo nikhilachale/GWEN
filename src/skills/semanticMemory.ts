@@ -10,7 +10,7 @@
 // longer all win top-K slots — the first wins, the rest are penalized for
 // being too similar to it. No deletions; just smarter selection.
 import { embed, cosine } from "./embeddings.js";
-import { setEmbedding, getRowsWithEmbeddings, get as getMem } from "./sqlite.js";
+import { setEmbedding, getRowsWithEmbeddings } from "./sqlite.js";
 
 const TOP_K = 5;
 const MIN_SCORE = 0.25;
@@ -59,7 +59,6 @@ function manualBonus(category: string, key: string): number {
  */
 export async function embedAndSave(key: string, text: string): Promise<void> {
   if (!key || !text) return;
-  if (getMem(key) == null) return;
   const vec = await embed(text);
   if (!vec) return;
   try {

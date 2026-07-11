@@ -10,15 +10,11 @@ import * as memoryTool from "./memory.js";
 const DEFAULT_BASE = path.join(os.homedir(), "Gwen-projects");
 
 function codexBin() {
-  return process.env.CODEX_CLI_PATH && fs.existsSync(process.env.CODEX_CLI_PATH)
-    ? process.env.CODEX_CLI_PATH
-    : "codex";
+  return process.env.CODEX_CLI_PATH || "codex";
 }
 
 function claudeBin() {
-  return process.env.CLAUDE_CLI_PATH && fs.existsSync(process.env.CLAUDE_CLI_PATH)
-    ? process.env.CLAUDE_CLI_PATH
-    : "claude";
+  return process.env.CLAUDE_CLI_PATH || "claude";
 }
 
 function codeAgent() {
@@ -96,6 +92,17 @@ Requirements:
 - Use the simplest possible solution that satisfies the request`;
 }
 
+function attachChildCleanup(child) {
+  const killChild = () => {
+    if (child.exitCode == null && !child.killed) child.kill("SIGTERM");
+  };
+  const cleanup = () => process.off("exit", killChild);
+  process.once("exit", killChild);
+  child.once("exit", cleanup);
+  child.once("error", cleanup);
+  return killChild;
+}
+
 function runCodex(prompt, cwd) {
   return new Promise((resolve, reject) => {
     let out = "";
@@ -119,6 +126,7 @@ function runCodex(prompt, cwd) {
       ],
       { cwd, env: process.env }
     );
+    const killChild = attachChildCleanup(child);
 
     child.stdout.on("data", (d) => {
       const text = d.toString();
@@ -131,7 +139,10 @@ function runCodex(prompt, cwd) {
       sendCodeOutput(text);
     });
 
-    child.on("error", reject);
+    child.on("error", (err) => {
+      killChild();
+      reject(err);
+    });
     child.on("exit", (code) => {
       if (code === 0) resolve();
       else {
@@ -156,11 +167,15 @@ function runClaudeCode(prompt, cwd) {
       ["--print", "--permission-mode", "acceptEdits", prompt],
       { cwd, env: process.env }
     );
+    const killChild = attachChildCleanup(child);
 
     child.stdout.on("data", (d) => sendCodeOutput(d.toString()));
     child.stderr.on("data", (d) => sendCodeOutput(`[err] ${d.toString()}`));
 
-    child.on("error", reject);
+    child.on("error", (err) => {
+      killChild();
+      reject(err);
+    });
     child.on("exit", (code) => {
       if (code === 0) resolve();
       else reject(new Error(`exit ${code}`));
