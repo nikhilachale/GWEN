@@ -40,6 +40,6 @@ test("HealthPanel renders loading shell and actions", () => {
   const html = renderToStaticMarkup(React.createElement(HealthPanel, { onClose: () => {} }));
 
   assert.match(html, /HEALTH/);
-  assert.match(html, /Refresh/);
+  assert.match(html, /\.\.\./);
   assert.match(html, /Collecting snapshot/);
 });

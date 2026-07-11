@@ -8,6 +8,7 @@
     "jsx": "react-jsx"
   },
   "include": [
+    "src/agents",
     "src/types",
     "src/core/voicePipeline.ts",
     "src/skills/dateParse.ts",

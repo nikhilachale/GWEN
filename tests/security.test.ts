@@ -12,10 +12,10 @@ import {
 import { TOOL_POLICIES, validateToolPolicies } from "../src/skills/toolPolicy.js";
 
 test("registered brain tools and security policies stay in sync", async () => {
-  const brainSource = await readFile(path.join(process.cwd(), "src/core/brain.ts"), "utf8");
-  const toolsBlock = brainSource.slice(
-    brainSource.indexOf("const TOOLS = ["),
-    brainSource.indexOf("// ─── Handler map")
+  const registrySource = await readFile(path.join(process.cwd(), "src/tools/registry.ts"), "utf8");
+  const toolsBlock = registrySource.slice(
+    registrySource.indexOf("export const TOOLS = ["),
+    registrySource.indexOf("// ─── Handler map")
   );
   const names = [...toolsBlock.matchAll(/name:\s*"([^"]+)"/g)].map((match) => match[1]);
   assert.ok(names.length > 0);
