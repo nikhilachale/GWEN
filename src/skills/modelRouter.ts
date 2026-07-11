@@ -38,7 +38,7 @@ const TOOL_INTENTS = new Set([
 ]);
 
 function wantsGwenCodeWork(text: string) {
-  return /\b(self[- ]?(fix|build|building|repair)|fix yourself|change (your|gwen)|add .* to gwen|gwen.*(bug|broken|feature)|input bar|conversation window)\b/i.test(text);
+  return /\b(self[- ]?(fix|build|building|repair)|fix yourself|change (your|gwen)|add .* to gwen|add .* feature|build .* (into|for) (yourself|you|gwen)|implement .* (in|for) (yourself|you|gwen)|wire .* (into|up)|gwen.*(bug|broken|feature)|daily check-?in|task tracker|input bar|conversation window)\b/i.test(text);
 }
 
 function wantsExternalCodeWork(text: string) {

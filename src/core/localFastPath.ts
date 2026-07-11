@@ -1,6 +1,6 @@
 // src/core/localFastPath.ts — Local fast path for common requests without LLM
 import { dispatchTool } from "./toolDispatcher.js";
-import { recordExchange } from "./conversationManager.js";
+import { getPendingTool } from "../skills/security.js";
 
 function formatClock(now = new Date()): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -59,6 +59,10 @@ function extractTaskText(text: string): string {
     .trim();
 }
 
+function wantsSelfCodeWork(text: string): boolean {
+  return /\b(self[- ]?(fix|build|building|repair)|fix yourself|fix this( thing| bug| issue)?|change (your|gwen)|edit (your|gwen)|modify (your|gwen)|update (your|gwen)|add .* to gwen|add .* feature|build this feature|build .* feature|build .* (into|for) (yourself|you|gwen)|implement this|implement .* (in|for) (yourself|you|gwen)|make (the )?(changes|change)( in| to)? (the )?code|make .* code changes?|wire .* (into|up)|spawn codex|codex .* (this folder|this repo|gwen|your code)|gwen.*(bug|broken|feature)|daily check-?in|task tracker|input bar|conversation window)\b/i.test(text);
+}
+
 export interface LocalFastPathOptions {
   intentHint?: { type: string; confidence: number };
   skipHistory?: boolean;
@@ -67,7 +71,7 @@ export interface LocalFastPathOptions {
 }
 
 export interface LocalFastPathDeps {
-  handlers: Record<string, (input: any) => Promise<string | object>>;
+  handlers: Record<string, (input: any) => string | object | Promise<string | object>>;
 }
 
 /**
@@ -81,10 +85,13 @@ export async function tryLocalFastPath(
 ): Promise<string | null> {
   const text = String(userInput || "").trim();
   if (!text) return null;
+  if (getPendingTool()) return null;
   const lower = text.toLowerCase();
   let reply: string | null = null;
 
-  if (/^(hi|hey|hello|yo|sup)\b[.!?]*$/i.test(text)) {
+  if (wantsSelfCodeWork(text)) {
+    reply = formatLocalResult(await dispatchTool("fix_self_code", { description: text }, deps.handlers));
+  } else if (/^(hi|hey|hello|yo|sup)\b[.!?]*$/i.test(text)) {
     reply = "Hey. I'm here.";
   } else if (/^(thanks|thank you|cool|ok|okay|got it|done)\b[.!?]*$/i.test(text)) {
     reply = "Got it.";
@@ -127,6 +134,9 @@ export async function tryLocalFastPath(
   }
 
   if (!reply) return null;
-  if (!opts.skipHistory) await recordExchange(userInput, reply, "local");
+  if (!opts.skipHistory) {
+    const { recordExchange } = await import("./conversationManager.js");
+    await recordExchange(userInput, reply, "local");
+  }
   return reply;
 }

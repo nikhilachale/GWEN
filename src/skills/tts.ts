@@ -4,8 +4,8 @@
 // built-in `say` command for local speech without a TTS API key.
 // Multiple speak() calls queue playback serially; Fish synthesis can overlap
 // with earlier playback.
-import { spawn, execSync, readFileSync } from "node:child_process";
-import { readFileSync, existsSync } from "node:fs";
+import { spawn, execSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { Readable } from "node:stream";
 import playSoundFactory from "play-sound";
 import path from "node:path";
@@ -48,7 +48,7 @@ function streamArgs(p) {
 }
 
 let currentChild = null;
-let playQueue = Promise.resolve();
+let playQueue: Promise<void> = Promise.resolve();
 let counter = 0;
 let fishDisabledReason = "";
 
@@ -79,7 +79,7 @@ export async function speak(text) {
   return speakStream(text, () => {});
 }
 
-export async function speakStream(text, onLevel = () => {}) {
+export async function speakStream(text, onLevel = (_level: number) => {}): Promise<void> {
   if (!text || !text.trim()) return;
 
   // Check text mode - if enabled, skip TTS entirely
@@ -155,8 +155,8 @@ function pickProvider() {
   return "fish";
 }
 
-function speakWithMacOSSay(text, onLevel) {
-  return new Promise((resolve) => {
+function speakWithMacOSSay(text, onLevel): Promise<void> {
+  return new Promise<void>((resolve) => {
     if (process.platform !== "darwin") {
       console.warn("[tts] macos provider is only available on macOS.");
       onLevel(0);
@@ -234,16 +234,20 @@ async function fishOpenStream(text) {
   if (!res.ok || !res.body) {
     throw new TtsProviderError("fish", res.status, await res.text().catch(() => ""));
   }
-  return Readable.fromWeb(res.body);
+  return Readable.fromWeb(res.body as any);
 }
 
 function isReadable(value) {
   return value && typeof value.pipe === "function" && typeof value.on === "function";
 }
 
-function pipeStreamToPlayer(nodeStream, onLevel) {
-  return new Promise((resolve) => {
-    const proc = spawn(STREAM_PLAYER, streamArgs(STREAM_PLAYER), {
+function pipeStreamToPlayer(nodeStream, onLevel): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (!STREAM_PLAYER) {
+      resolve();
+      return;
+    }
+    const proc = spawn(STREAM_PLAYER, streamArgs(STREAM_PLAYER) || [], {
       stdio: ["pipe", "ignore", "ignore"],
     });
     currentChild = proc;
@@ -287,8 +291,8 @@ async function synthFish(text) {
   return Buffer.concat(buffers);
 }
 
-function playFile(path) {
-  return new Promise((resolve) => {
+function playFile(path): Promise<void> {
+  return new Promise<void>((resolve) => {
     currentChild = player.play(path, (err) => {
       currentChild = null;
       if (err) console.warn("[tts] play err:", err.message);

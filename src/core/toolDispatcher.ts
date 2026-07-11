@@ -5,6 +5,7 @@ import {
   clearPendingTool,
   classifyTool,
   confirmationPrompt,
+  getPendingConfirmation,
   getPendingTool,
   isConfirmation,
   isDenial,
@@ -13,7 +14,7 @@ import {
 } from "../skills/security.js";
 
 export interface ToolHandler {
-  (input: any): Promise<string | object>;
+  (input: any): string | object | Promise<string | object>;
 }
 
 export interface ToolHandlers {

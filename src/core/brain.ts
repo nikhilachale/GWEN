@@ -5,9 +5,10 @@ import { createToolHandlers, TOOLS } from "../tools/registry.js";
 import { extractAndSaveFacts } from "../skills/passiveMemory.js";
 import { getAmbientContext } from "../skills/ambientContext.js";
 import { formatRelevantBlock } from "../skills/semanticMemory.js";
-import { sendActivity } from "../skills/ipc.js";
+import { sendActivity, sendContextPanel } from "../skills/ipc.js";
 import { chooseBrainRoute, logBrainRoute } from "../skills/modelRouter.js";
 import { logAnthropicUsage, logOllamaUsage } from "../skills/modelUsage.js";
+import { getPendingConfirmation } from "../skills/security.js";
 import * as tasksTool from "../tools/tasks.js";
 
 // Refactored modules
@@ -31,7 +32,6 @@ const MAX_MODEL_HISTORY_MESSAGES = 20;
 function broadcastTasks() {
   try {
     const open = tasksTool.getAll().filter((t) => !t.done);
-    const { sendContextPanel } = require("../skills/ipc.js");
     sendContextPanel("tasks", open);
   } catch (err) {
     console.debug("[brain] task broadcast failed:", err);
@@ -83,7 +83,7 @@ async function prepareBrainTurn(userInput: string, opts: Record<string, any>) {
   const userNickname = await safeRecall("user_nickname");
   const ambient = opts.skipAmbient ? null : await getAmbientContext().catch(() => null);
   const relevantBlock = await formatRelevantBlock(userInput).catch(() => "");
-  const messages = [
+  const messages: any[] = [
     ...ConversationManager.getHistoryForTurn(MAX_MODEL_HISTORY_MESSAGES),
     { role: "user", content: userInput },
   ];
@@ -231,7 +231,7 @@ export async function runBrain(userInput: string, opts: Record<string, any> = {}
     max_tokens: 1024,
     temperature: 0.2,
     system,
-    ...(route.toolsEnabled ? { tools: TOOLS } : {}),
+    ...(route.toolsEnabled ? { tools: TOOLS as any } : {}),
     messages,
   });
   logAnthropicUsage({
@@ -262,7 +262,7 @@ export async function runBrain(userInput: string, opts: Record<string, any> = {}
       max_tokens: 1024,
       temperature: 0.2,
       system,
-      tools: TOOLS,
+      tools: TOOLS as any,
       messages,
     });
     logAnthropicUsage({
@@ -330,7 +330,7 @@ export async function runBrainStream(
       system,
       messages,
     };
-    if (route.toolsEnabled) streamOpts.tools = TOOLS;
+    if (route.toolsEnabled) streamOpts.tools = TOOLS as any;
     const stream = client.messages.stream(streamOpts);
 
     let buffer = "";
@@ -412,6 +412,5 @@ export const renameConversation = ConversationManager.renameConversation;
 export const pinConversation = ConversationManager.pinConversation;
 export const deleteConversation = ConversationManager.deleteConversation;
 export const getPendingConfirmationState = () => {
-  const { getPendingConfirmation } = require("../skills/security.js");
   return getPendingConfirmation();
 };
