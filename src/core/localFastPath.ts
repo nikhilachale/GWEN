@@ -92,7 +92,16 @@ export async function tryLocalFastPath(
   if (wantsSelfCodeWork(text)) {
     reply = formatLocalResult(await dispatchTool("fix_self_code", { description: text }, deps.handlers));
   } else if (/^(hi|hey|hello|yo|sup)\b[.!?]*$/i.test(text)) {
-    reply = "Hey. I'm here.";
+    // Gwen Stacy energy: slightly detached but warm acknowledgment
+    const greetings = [
+      "Hey. I'm here.",
+      "Hey. You rang?",
+      "Yo. What's up?",
+      "Hey. I'm listening.",
+      "Hey. Miss me?",
+      "Hey. What do you need?",
+    ];
+    reply = greetings[Math.floor(Math.random() * greetings.length)];
   } else if (/^(thanks|thank you|cool|ok|okay|got it|done)\b[.!?]*$/i.test(text)) {
     reply = "Got it.";
   } else if (/\b(what time is it|current time|time now)\b/i.test(text)) {

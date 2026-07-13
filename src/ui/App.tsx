@@ -336,7 +336,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "8px 10px",
     background: "rgba(7, 7, 10, 0.82)",
     border: "1px solid rgba(237, 28, 36, 0.48)",
-    boxShadow: "0 0 18px rgba(237, 28, 36, 0.18), inset 0 0 16px rgba(0, 180, 216, 0.06)",
+    boxShadow: "0 0 18px rgba(237, 28, 36, 0.18), inset 0 0 16px rgba(237, 28, 36, 0.08)",
     backdropFilter: "blur(12px)",
     WebkitBackdropFilter: "blur(12px)",
     clipPath:
@@ -348,7 +348,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: "100%",
     minWidth: 0,
     height: 34,
-    border: "1px solid rgba(0, 180, 216, 0.25)",
+    border: "1px solid rgba(237, 28, 36, 0.36)",
     outline: "none",
     borderRadius: 0,
     padding: "0 12px",
@@ -356,7 +356,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#ffffff",
     fontSize: 13,
     letterSpacing: 0,
-    textShadow: "0 0 5px rgba(0, 180, 216, 0.24)",
+    textShadow: "0 0 5px rgba(237, 28, 36, 0.24)",
   },
   sendButton: {
     height: 34,

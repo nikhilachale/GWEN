@@ -22,6 +22,8 @@ import * as timersTool from "./timers.js";
 import * as weatherTool from "./weather.js";
 import * as pdfTool from "./pdf.js";
 import * as screenCore from "../core/screen.js";
+import * as dailyTasksTool from "./dailyTasks.js";
+import * as dailyRoutine from "../skills/dailyRoutine.js";
 import { forgetAutoFact } from "../skills/passiveMemory.js";
 import { validateSecurityPolicies } from "../skills/security.js";
 
@@ -591,6 +593,34 @@ export const TOOLS = [
       },
     },
   },
+  {
+    name: "review_daily_tasks",
+    description: "Review today's incomplete tasks and decide what to do with each. Use this when the user asks to review incomplete tasks at the end of the day.",
+    input_schema: {
+      type: "object",
+      properties: {
+        choices: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              taskId: { type: "string", description: "The ID of the task to process." },
+              action: { type: "string", enum: ["forward", "pending", "complete"], description: "forward = move to tomorrow, pending = keep as-is, complete = mark done" },
+            },
+            required: ["taskId", "action"],
+          },
+        },
+      },
+    },
+  },
+  {
+    name: "skip_startup_greeting",
+    description: "Skip the daily startup greeting for today. Use this when the user says they don't want to hear the welcome message today.",
+    input_schema: {
+      type: "object",
+      properties: {},
+    },
+  },
 ];
 
 // ─── Handler map ─────────────────────────────────────────────────────
@@ -659,6 +689,11 @@ export function createToolHandlers(options: { onTasksChanged?: () => void } = {}
   cancel_timer:       (i) => timersTool.cancelTimer(i),
   get_weather:        (i) => weatherTool.getWeather(i),
   read_pdf:           (i) => pdfTool.readPdf(i),
+  review_daily_tasks: (i) => dailyTasksTool.reviewDailyTasks(i?.choices || []),
+  skip_startup_greeting: () => {
+    dailyRoutine.skipStartupGreeting();
+    return "Startup greeting skipped for today.";
+  },
   };
 }
 

@@ -269,6 +269,16 @@ const POLICIES = {
     confirmation: "none",
     reason: "Fetches weather information.",
   },
+  review_daily_tasks: {
+    risk: "safe",
+    confirmation: "none",
+    reason: "Updates Gwen's local task list during the daily review.",
+  },
+  skip_startup_greeting: {
+    risk: "safe",
+    confirmation: "none",
+    reason: "Updates Gwen's local startup greeting state.",
+  },
 } as const satisfies Record<string, ToolPolicy>;
 
 export const TOOL_POLICIES: Readonly<Record<string, ToolPolicy>> = POLICIES;

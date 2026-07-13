@@ -189,7 +189,7 @@ function runCodex(prompt, cwd) {
         "never",
         prompt,
       ],
-      { cwd, env: process.env }
+      { cwd, env: process.env, stdio: ["ignore", "pipe", "pipe"] }
     );
 
     child.stdout.on("data", (d) => {
@@ -203,8 +203,17 @@ function runCodex(prompt, cwd) {
       sendCodeOutput(text);
     });
 
-    child.on("error", reject);
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error("code agent timed out after 180s"));
+    }, 180000);
+
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
     child.on("exit", (code) => {
+      clearTimeout(timer);
       if (code === 0) resolve();
       else {
         const tail =
@@ -226,14 +235,23 @@ function runClaudeCode(prompt, cwd) {
     const child = spawn(
       claudeBin(),
       ["--print", "--permission-mode", "acceptEdits", prompt],
-      { cwd, env: process.env }
+      { cwd, env: process.env, stdio: ["ignore", "pipe", "pipe"] }
     );
 
     child.stdout.on("data", (d) => sendCodeOutput(d.toString()));
     child.stderr.on("data", (d) => sendCodeOutput(`[err] ${d.toString()}`));
 
-    child.on("error", reject);
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error("code agent timed out after 180s"));
+    }, 180000);
+
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
     child.on("exit", (code) => {
+      clearTimeout(timer);
       if (code === 0) resolve();
       else reject(new Error(`exit ${code}`));
     });

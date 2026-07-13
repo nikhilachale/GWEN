@@ -350,6 +350,15 @@ app.whenReady().then(async () => {
   // Proactive loop — morning brief, calendar nudges, optional stale-task pings
   proactive.startProactiveLoop();
 
+  // Daily routine — startup greeting and shutdown task review. If the richer
+  // startup briefing is enabled, let that be the only opener.
+  const dailyRoutineMod = await import("../src/skills/dailyRoutine.js");
+  if (process.env.GWEN_STARTUP_BRIEFING !== "1") {
+    dailyRoutineMod.checkStartupRoutine().catch((err) =>
+      console.warn("[gwen] daily startup routine failed:", err.message)
+    );
+  }
+
   ipc.sendState("idle");
 
   if (process.env.GWEN_STARTUP_BRIEFING !== "1") {
@@ -502,4 +511,22 @@ app.on("activate", () => {
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+});
+
+// Daily shutdown review — review incomplete tasks before quitting
+app.on("before-quit", async (e) => {
+  if (process.env.GWEN_SKIP_SHUTDOWN_REVIEW === "1") return;
+
+  // Prevent quit temporarily to run review
+  e.preventDefault();
+
+  try {
+    const dailyRoutineMod = await import("../src/skills/dailyRoutine.js");
+    await dailyRoutineMod.runShutdownReview();
+  } catch (err) {
+    console.warn("[gwen] daily shutdown review failed:", err.message);
+  }
+
+  // Now allow quit to proceed
+  app.quit();
 });
