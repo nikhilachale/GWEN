@@ -5,7 +5,7 @@
 // Multiple speak() calls queue playback serially; Fish synthesis can overlap
 // with earlier playback.
 import { spawn, execSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { Readable } from "node:stream";
 import playSoundFactory from "play-sound";
 import path from "node:path";
@@ -17,6 +17,121 @@ const FISH_ENDPOINT = process.env.FISH_ENDPOINT || "https://api.fish.audio/v1/tt
 const FISH_LATENCY = process.env.FISH_LATENCY || "balanced";
 
 const STREAM_PLAYER = detectStreamPlayer();
+
+/**
+ * Audio buffer pool for in-memory audio management.
+ * Reduces I/O overhead by reusing buffers instead of writing temp files.
+ */
+class AudioBufferPool {
+  private buffers: Map<string, { buffer: Buffer; refCount: number; lastUsed: number }> = new Map();
+  private maxPoolSize: number = 10; // Max buffers to keep in memory
+  private maxBufferSize: number = 5 * 1024 * 1024; // 5MB max per buffer
+  private cleanupInterval: NodeJS.Timeout | null = null;
+
+  constructor() {
+    // Clean up unused buffers every 30 seconds
+    this.cleanupInterval = setInterval(() => this.cleanup(), 30000);
+  }
+
+  /**
+   * Store a buffer in the pool with reference counting.
+   */
+  store(key: string, buffer: Buffer): void {
+    if (buffer.length > this.maxBufferSize) {
+      // Too large for pool, skip
+      return;
+    }
+
+    const existing = this.buffers.get(key);
+    if (existing) {
+      existing.refCount++;
+      existing.lastUsed = Date.now();
+    } else {
+      // Evict oldest if pool is full
+      if (this.buffers.size >= this.maxPoolSize) {
+        this.evictOldest();
+      }
+      this.buffers.set(key, { buffer, refCount: 1, lastUsed: Date.now() });
+    }
+  }
+
+  /**
+   * Retrieve a buffer from the pool.
+   */
+  get(key: string): Buffer | null {
+    const entry = this.buffers.get(key);
+    if (entry) {
+      entry.refCount++;
+      entry.lastUsed = Date.now();
+      return entry.buffer;
+    }
+    return null;
+  }
+
+  /**
+   * Release a reference to a buffer.
+   */
+  release(key: string): void {
+    const entry = this.buffers.get(key);
+    if (entry) {
+      entry.refCount = Math.max(0, entry.refCount - 1);
+    }
+  }
+
+  /**
+   * Remove a specific buffer from the pool.
+   */
+  remove(key: string): void {
+    this.buffers.delete(key);
+  }
+
+  /**
+   * Clean up buffers that haven't been used recently.
+   */
+  private cleanup(): void {
+    const now = Date.now();
+    const staleThreshold = 60000; // 1 minute
+
+    for (const [key, entry] of this.buffers.entries()) {
+      if (entry.refCount === 0 && (now - entry.lastUsed) > staleThreshold) {
+        this.buffers.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Evict the oldest buffer from the pool.
+   */
+  private evictOldest(): void {
+    let oldestKey: string | null = null;
+    let oldestTime = Infinity;
+
+    for (const [key, entry] of this.buffers.entries()) {
+      if (entry.lastUsed < oldestTime) {
+        oldestTime = entry.lastUsed;
+        oldestKey = key;
+      }
+    }
+
+    if (oldestKey) {
+      this.buffers.delete(oldestKey);
+    }
+  }
+
+  /**
+   * Clean up and stop the cleanup interval.
+   */
+  destroy(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    this.buffers.clear();
+  }
+}
+
+// Global buffer pool instance
+const bufferPool = new AudioBufferPool();
 
 function detectStreamPlayer() {
   const forced = process.env.GWEN_STREAM_PLAYER;
@@ -117,9 +232,8 @@ export async function speakStream(text, onLevel = (_level: number) => {}): Promi
         if (isReadable(result)) {
           await pipeStreamToPlayer(result, onLevel);
         } else if (result.buffer) {
-          const path = `${TMP_DIR}/mj_out_${counter++}.${result.ext || "mp3"}`;
-          writeFileSync(path, result.buffer);
-          await playFile(path);
+          // Try to play from buffer directly using player stdin
+          await playFromBuffer(result.buffer, result.ext || "mp3", onLevel);
         }
       }
       onLevel(0);
@@ -135,9 +249,16 @@ export async function speakStream(text, onLevel = (_level: number) => {}): Promi
       const result = await synths[i];
       if (!result) continue;
       if (result.buffer) {
-        const path = `${TMP_DIR}/mj_out_${counter++}.${result.ext || "mp3"}`;
-        writeFileSync(path, result.buffer);
-        await playFile(path);
+        // Try to play from buffer, fall back to temp file
+        const bufferKey = `chunk_${counter}_${result.ext || "mp3"}`;
+        const played = await playFromBuffer(result.buffer, result.ext || "mp3", onLevel);
+        if (!played) {
+          // Fallback to temp file
+          const path = `${TMP_DIR}/mj_out_${counter++}.${result.ext || "mp3"}`;
+          writeFileSync(path, result.buffer);
+          await playFile(path);
+          try { unlinkSync(path); } catch {}
+        }
       }
     }
     onLevel(0);
@@ -299,6 +420,77 @@ function playFile(path): Promise<void> {
       resolve();
     });
   });
+}
+
+/**
+ * Play audio from a buffer without writing to disk.
+ * Uses the buffer pool for caching and pipes to player if available.
+ * @returns {Promise<boolean>} true if played from buffer, false if fallback needed
+ */
+async function playFromBuffer(buffer: Buffer, ext: string, onLevel: (level: number) => void): Promise<boolean> {
+  // Check buffer pool first
+  const bufferKey = `audio_${buffer.length}_${ext}`;
+  const cached = bufferPool.get(bufferKey);
+  const audioBuffer = cached || buffer;
+
+  if (STREAM_PLAYER) {
+    // Try to pipe directly to streaming player
+    return new Promise<boolean>((resolve) => {
+      const proc = spawn(STREAM_PLAYER, streamArgs(STREAM_PLAYER) || [], {
+        stdio: ["pipe", "ignore", "ignore"],
+      });
+
+      currentChild = proc;
+      let done = false;
+      let hasStarted = false;
+
+      const finish = (success: boolean) => {
+        if (done) return;
+        done = true;
+        currentChild = null;
+        resolve(success);
+      };
+
+      proc.on("error", (err) => {
+        console.warn("[tts] buffer player error:", err.message);
+        finish(false);
+      });
+
+      proc.on("close", () => finish(hasStarted));
+
+      proc.stdin.on("error", () => {
+        // Player stdin error - likely couldn't accept buffer
+        finish(false);
+      });
+
+      // Write buffer to player stdin
+      try {
+        proc.stdin.write(audioBuffer, (err) => {
+          if (err) {
+            console.warn("[tts] buffer write error:", err.message);
+            finish(false);
+            return;
+          }
+          hasStarted = true;
+          proc.stdin.end();
+          // Simulate audio level for visualization
+          onLevel(0.5);
+          setTimeout(() => onLevel(0), 200);
+        });
+      } catch (err) {
+        console.warn("[tts] buffer write failed:", err?.message || err);
+        finish(false);
+      }
+
+      // Store in pool for future use
+      if (!cached) {
+        bufferPool.store(bufferKey, buffer);
+      }
+    });
+  }
+
+  // No streaming player available - fallback needed
+  return false;
 }
 
 function splitLongText(text, maxLen) {

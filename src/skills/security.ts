@@ -62,7 +62,7 @@ export function getPendingConfirmation() {
     summary: next.summary,
     ageMs: Date.now() - next.createdAt,
     expiresInMs: Math.max(0, CONFIRM_TTL_MS - (Date.now() - next.createdAt)),
-    requiredText: risk === "destructive" ? requiredConfirmationText(next.name) : "yes",
+    requiredText: requiresExactConfirmation(next.name) ? requiredConfirmationText(next.name) : "yes",
   };
 }
 
@@ -72,7 +72,7 @@ export function clearPendingTool() {
 
 export function isConfirmation(text: string, toolName?: string) {
   const value = String(text || "").trim();
-  if (toolName && classifyTool(toolName) === "destructive") {
+  if (toolName && requiresExactConfirmation(toolName)) {
     return value.toLowerCase() === requiredConfirmationText(toolName);
   }
   return /^(yes|yep|yeah|confirm|confirmed|approve|approved|do it|go ahead|run it|send it|allow)$/i.test(value);
@@ -85,8 +85,11 @@ export function isDenial(text: string) {
 export function confirmationPrompt(name: string, input: any, summary: string) {
   const risk = classifyTool(name);
   const detail = summarizeInput(input);
-  if (risk === "destructive") {
+  if (requiresExactConfirmation(name)) {
     return `For security, I need exact confirmation before I control your Mac or send anything. Reply "${requiredConfirmationText(name)}" to approve: ${summary}${detail ? ` (${detail})` : ""}.`;
+  }
+  if (risk === "destructive") {
+    return `Confirm before I modify Gwen: ${summary}${detail ? ` (${detail})` : ""}. Reply "yes" to approve.`;
   }
   return `For security, I need confirmation before I access private local data. Confirm: ${summary}${detail ? ` (${detail})` : ""}.`;
 }
@@ -126,6 +129,10 @@ function summarizeInput(input: any) {
   if (input.query) parts.push(`query: ${String(input.query).slice(0, 60)}`);
   if (input.title) parts.push(`title: ${String(input.title).slice(0, 60)}`);
   return parts.join(", ");
+}
+
+function requiresExactConfirmation(name: string) {
+  return !["fix_self_code", "repair_self"].includes(name) && classifyTool(name) === "destructive";
 }
 
 export function requiredConfirmationText(name: string) {

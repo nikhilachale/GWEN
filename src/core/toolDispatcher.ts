@@ -12,6 +12,66 @@ import {
   needsConfirmation,
   setPendingTool,
 } from "../skills/security.js";
+import {
+  withRetry,
+  withRetryForProvider,
+  DEFAULT_POLICIES,
+  type RetryMetrics,
+} from "../skills/retry.js";
+
+/**
+ * Determine which provider a tool uses for retry policy
+ */
+function getToolProvider(tool: string): string {
+  const providerMap: Record<string, string> = {
+    search_web: "tavily",
+    get_calendar: "google",
+    get_emails: "google",
+    get_weather: "weather",
+    save_note: "local",
+    get_notes: "local",
+    add_task: "local",
+    get_tasks: "local",
+    remember: "local",
+    recall: "local",
+    build_software: "openai",
+    fix_self_code: "openai",
+    get_screen_context: "local",
+    send_imessage: "local",
+    send_whatsapp: "local",
+    type_text: "local",
+    music_control: "local",
+    music_play: "local",
+    music_now_playing: "local",
+    set_timer: "local",
+    set_alarm: "local",
+    list_timers: "local",
+    cancel_timer: "local",
+    facetime: "local",
+    call_phone: "local",
+    run_shortcut: "local",
+    set_volume: "local",
+    set_brightness: "local",
+    toggle_wifi: "local",
+    toggle_bluetooth: "local",
+    toggle_dark_mode: "local",
+    lock_screen: "local",
+    sleep_mac: "local",
+    get_battery: "local",
+    open_app: "local",
+    open_path: "local",
+    list_files: "local",
+    read_file: "local",
+    read_pdf: "local",
+    search_maps: "google",
+    get_directions: "google",
+    create_apple_note: "local",
+    search_apple_notes: "local",
+    add_reminder: "local",
+    list_reminders: "local",
+  };
+  return providerMap[tool] || "default";
+}
 
 export interface ToolHandler {
   (input: any): string | object | Promise<string | object>;
@@ -155,8 +215,38 @@ export async function dispatchToolNow(
   handlers: ToolHandlers
 ): Promise<string> {
   sendActivity({ kind: "tool_start", tool: name, summary });
+
+  const provider = getToolProvider(name);
+  const policy = DEFAULT_POLICIES[provider] || DEFAULT_POLICIES.default;
+
+  // Skip retry for local/destructive tools (they should fail fast)
+  const skipRetry = provider === "local" || classifyTool(name) === "destructive";
+
   try {
-    const result = await handlers[name](input || {});
+    let result: any;
+    let metrics: RetryMetrics | undefined;
+
+    if (skipRetry) {
+      // Direct execution without retry
+      result = await handlers[name](input || {});
+    } else {
+      // Execute with retry and metrics
+      const retryResult = await withRetryMetrics(
+        async () => await handlers[name](input || {}),
+        policy
+      );
+      result = retryResult.result;
+      metrics = retryResult.metrics;
+
+      // Log retry metrics if multiple attempts were made
+      if (metrics.attempts > 1) {
+        console.log(
+          `[toolDispatcher] ${name} succeeded after ${metrics.attempts} attempts ` +
+          `(${metrics.totalDelay}ms total delay)`
+        );
+      }
+    }
+
     auditTool({ tool: name, action: "executed", summary }).catch(() => {});
     sendActivity({ kind: "tool_done", tool: name, summary });
     return typeof result === "string" ? result : JSON.stringify(result);

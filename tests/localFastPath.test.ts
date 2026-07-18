@@ -21,7 +21,7 @@ test("routes Gwen code-change requests directly to fix_self_code confirmation", 
     { skipHistory: true }
   );
 
-  assert.match(reply || "", /confirm fix/);
+  assert.match(reply || "", /Reply "yes"/);
   assert.equal(calls.length, 0);
   assert.equal(getPendingTool()?.name, "fix_self_code");
   clearPendingTool();
@@ -67,9 +67,26 @@ test("routes common feature/fix phrases to fix_self_code confirmation", async ()
       { skipHistory: true }
     );
 
-    assert.match(reply || "", /confirm fix/, text);
+    assert.match(reply || "", /Reply "yes"/, text);
     assert.equal(getPendingTool()?.name, "fix_self_code", text);
   }
 
+  clearPendingTool();
+});
+
+test("routes visual progress requests to fix_self_code confirmation", async () => {
+  clearPendingTool();
+  const reply = await tryLocalFastPath(
+    "add a loading state or progress animation so I can see when Gwen is updating herself",
+    {
+      handlers: {
+        fix_self_code: async () => "should not execute before confirmation",
+      },
+    },
+    { skipHistory: true }
+  );
+
+  assert.match(reply || "", /Reply "yes"/);
+  assert.equal(getPendingTool()?.name, "fix_self_code");
   clearPendingTool();
 });

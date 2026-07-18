@@ -35,6 +35,12 @@ test("destructive tools require exact confirmation text", () => {
   assert.equal(isConfirmation("confirm send", "send_imessage"), true);
 });
 
+test("Gwen self-edits accept ordinary confirmation", () => {
+  assert.equal(isConfirmation("yes", "fix_self_code"), true);
+  assert.equal(isConfirmation("go ahead", "fix_self_code"), true);
+  assert.equal(isConfirmation("do it", "repair_self"), true);
+});
+
 test("pending confirmation exposes the required approval phrase", () => {
   clearPendingTool();
   setPendingTool("call_phone", { number: "555-0100" }, "Call 555-0100");
@@ -42,5 +48,15 @@ test("pending confirmation exposes the required approval phrase", () => {
   assert.equal(pending?.name, "call_phone");
   assert.equal(pending?.risk, "destructive");
   assert.equal(pending?.requiredText, "confirm call");
+  clearPendingTool();
+});
+
+test("pending Gwen self-edit confirmation exposes ordinary approval phrase", () => {
+  clearPendingTool();
+  setPendingTool("fix_self_code", { description: "add loading state" }, "Fixing herself: add loading state");
+  const pending = getPendingConfirmation();
+  assert.equal(pending?.name, "fix_self_code");
+  assert.equal(pending?.risk, "destructive");
+  assert.equal(pending?.requiredText, "yes");
   clearPendingTool();
 });

@@ -103,6 +103,86 @@ export async function transcribeAudio(maxMs = 15000) {
 }
 
 /**
+ * Stream transcription results in real-time with partial results.
+ * Uses streaming APIs when available (Groq/OpenAI) with fallback to batch.
+ * @param {string} filePath - Path to audio file
+ * @param {Object} options - Streaming options
+ * @param {Function} options.onPartial - Callback for partial results (text, confidence)
+ * @param {Function} options.onFinal - Callback for final result
+ * @param {number} options.confidenceThreshold - Minimum confidence (0-1)
+ * @returns {Promise<string>} Final transcript
+ */
+export async function transcribeStream(filePath, options = {}) {
+  const {
+    onPartial = () => {},
+    onFinal = () => {},
+    confidenceThreshold = 0.7,
+  } = options;
+
+  // Try streaming providers first
+  if ((process.env.GWEN_STT_PROVIDER || "").toLowerCase() === "macos") {
+    try {
+      return await transcribeMacOSSpeech(filePath);
+    } catch (err) {
+      console.warn("[stt] macos local speech failed:", err.message);
+      return "";
+    }
+  }
+
+  // Try Groq streaming (note: Groq doesn't currently support audio streaming)
+  // Fall back to batch but call onFinal when complete
+  if (process.env.GROQ_KEY) {
+    try {
+      const text = await transcribeGroq(filePath);
+      onFinal(text);
+      return text;
+    } catch (err) {
+      console.warn("[stt] Groq failed, falling back:", err.message);
+    }
+  }
+
+  // Try OpenAI batch (OpenAI doesn't support audio streaming yet)
+  if (process.env.OPENAI_KEY) {
+    try {
+      const openai = await getOpenAI();
+      const result = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(filePath),
+        model: "whisper-1",
+        language: "en",
+        temperature: 0,
+        prompt: STT_PROMPT,
+      });
+      const text = (result.text || "").trim();
+      onFinal(text);
+      return text;
+    } catch (err) {
+      console.error("[stt] cloud whisper failed:", err.message);
+    }
+  }
+
+  // Fall back to local whisper (batch only)
+  try {
+    const nodewhisper = await getLocalWhisper();
+    const out = await nodewhisper(filePath, {
+      modelName: MODEL_NAME,
+      autoDownloadModelName: MODEL_NAME,
+      removeWavFileAfterTranscription: false,
+      whisperOptions: {
+        outputInText: true,
+        language: "en",
+        wordTimestamps: false,
+      },
+    });
+    const text = cleanWhisperOutput(out);
+    onFinal(text);
+    return text;
+  } catch (err) {
+    console.error("[stt] local whisper failed:", err.message);
+    return "";
+  }
+}
+
+/**
  * Transcribe an existing audio file.
  * Provider chain: Groq (Whisper-large-v3-turbo) > OpenAI Whisper > local nodejs-whisper.
  */

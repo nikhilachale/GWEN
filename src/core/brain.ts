@@ -8,7 +8,7 @@ import { formatRelevantBlock } from "../skills/semanticMemory.js";
 import { sendActivity, sendContextPanel } from "../skills/ipc.js";
 import { chooseBrainRoute, logBrainRoute } from "../skills/modelRouter.js";
 import { logAnthropicUsage, logOllamaUsage } from "../skills/modelUsage.js";
-import { getPendingConfirmation } from "../skills/security.js";
+import { getPendingConfirmation, isConfirmation } from "../skills/security.js";
 import * as tasksTool from "../tools/tasks.js";
 
 // Refactored modules
@@ -42,6 +42,34 @@ const handlers = createToolHandlers({ onTasksChanged: broadcastTasks });
 
 // Initialize conversation manager on load
 await ConversationManager.initConversationManager();
+
+function inferConfirmedSelfFixProposal(userInput: string): string | null {
+  if (!isConfirmation(userInput, "fix_self_code")) return null;
+
+  const history = ConversationManager.getCurrentConversation().history || [];
+  const lastAssistant = [...history].reverse().find((m) => m.role === "assistant");
+  if (!lastAssistant?.content) return null;
+  const ts = lastAssistant.ts || lastAssistant.createdAt || 0;
+  if (ts && Date.now() - ts > 5 * 60_000) return null;
+
+  const text = lastAssistant.content.replace(/\s+/g, " ").trim();
+  const proposedSelfEdit =
+    /\b(want me to|should i|shall i|do you want me to|confirming the change|change confirmed)\b/i.test(text) &&
+    /\b(add|fix|change|update|wire|modify|implement|rewir(e|ing))\b/i.test(text) &&
+    /\b(gwen|myself|my own|self|code|loading state|progress animation|visual (indicator|feedback)|updating|rewiring)\b/i.test(text);
+
+  if (!proposedSelfEdit) return null;
+  return text.slice(0, 500);
+}
+
+async function runConfirmedSelfFixFromProposal(userInput: string, opts: Record<string, any>) {
+  const description = inferConfirmedSelfFixProposal(userInput);
+  if (!description) return null;
+  const summary = `Fixing herself: ${description.slice(0, 60)}`;
+  const reply = await dispatchToolNow("fix_self_code", { description }, summary, handlers);
+  await recordReply(userInput, reply, opts);
+  return reply;
+}
 
 async function safeRecall(key: string): Promise<string | null> {
   try {
@@ -214,6 +242,9 @@ export async function runBrain(userInput: string, opts: Record<string, any> = {}
     return reply;
   }
 
+  const confirmedSelfFix = await runConfirmedSelfFixFromProposal(userInput, opts);
+  if (confirmedSelfFix) return confirmedSelfFix;
+
   const { route, client, system, localSystem, messages } = await prepareBrainTurn(userInput, opts);
 
   if (route.provider === "ollama") {
@@ -281,11 +312,12 @@ export async function runBrain(userInput: string, opts: Record<string, any> = {}
 }
 
 /**
- * Streaming variant. Calls onSentence(text) for each complete sentence as it arrives.
- * Returns the full final reply text once done.
+ * Streaming variant with optimizations for faster TTS initiation.
+ * Calls onSentence(text) for each complete sentence as it arrives.
+ * Uses progressive sentence extraction with first-chunk timeout.
  * @param {string} userInput
  * @param {(sentence: string) => void} onSentence
- * @param {{ intentHint?: object; skipHistory?: boolean; noTools?: boolean; skipAmbient?: boolean }} [opts]
+ * @param {{ intentHint?: object; skipHistory?: boolean; noTools?: boolean; skipAmbient?: boolean; firstChunkTimeout?: number }} [opts]
  * @returns {Promise<string>}
  */
 export async function runBrainStream(
@@ -300,6 +332,12 @@ export async function runBrainStream(
     onSentence(reply);
     await recordReply(userInput, reply, opts);
     return reply;
+  }
+
+  const confirmedSelfFix = await runConfirmedSelfFixFromProposal(userInput, opts);
+  if (confirmedSelfFix) {
+    onSentence(confirmedSelfFix);
+    return confirmedSelfFix;
   }
 
   const { route, client, system, localSystem, messages } = await prepareBrainTurn(userInput, opts);
@@ -322,6 +360,11 @@ export async function runBrainStream(
   let turn = 0;
   const circuit = makeToolCircuit();
 
+  // Optimization: Early TTS initiation timeout (default 200ms)
+  const firstChunkTimeout = opts.firstChunkTimeout ?? 200;
+  let firstChunkEmitted = false;
+  let firstChunkTimer: NodeJS.Timeout | null = null;
+
   while (turn < MAX_TOOL_TURNS) {
     const streamOpts: any = {
       model: route.model || MODEL,
@@ -336,6 +379,18 @@ export async function runBrainStream(
     let buffer = "";
     let turnText = "";
 
+    // Set up early emission timer
+    firstChunkTimer = setTimeout(() => {
+      if (!firstChunkEmitted && buffer.length > 10) {
+        // Emit partial buffer for early TTS initiation
+        const partial = buffer.trim();
+        if (partial.length > 5) {
+          onSentence(partial + "…");
+          firstChunkEmitted = true;
+        }
+      }
+    }, firstChunkTimeout);
+
     for await (const event of stream) {
       if (
         event.type === "content_block_delta" &&
@@ -344,10 +399,28 @@ export async function runBrainStream(
         const chunk = event.delta.text || "";
         buffer += chunk;
         turnText += chunk;
+
+        // Clear first-chunk timer on substantial content
+        if (!firstChunkEmitted && buffer.length > 20 && firstChunkTimer) {
+          clearTimeout(firstChunkTimer);
+          firstChunkTimer = null;
+        }
+
         const { sentences, remainder } = splitSentences(buffer);
-        for (const s of sentences) if (s.trim()) onSentence(s.trim());
+        for (const s of sentences) {
+          if (s.trim()) {
+            onSentence(s.trim());
+            firstChunkEmitted = true;
+          }
+        }
         buffer = remainder;
       }
+    }
+
+    // Clean up timer
+    if (firstChunkTimer) {
+      clearTimeout(firstChunkTimer);
+      firstChunkTimer = null;
     }
 
     const finalMessage = await stream.finalMessage();

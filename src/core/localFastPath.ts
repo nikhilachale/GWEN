@@ -60,7 +60,7 @@ function extractTaskText(text: string): string {
 }
 
 function wantsSelfCodeWork(text: string): boolean {
-  return /\b(self[- ]?(fix|build|building|repair)|fix yourself|fix this( thing| bug| issue)?|change (your|gwen)|edit (your|gwen)|modify (your|gwen)|update (your|gwen)|add .* to gwen|add .* feature|build this feature|build .* feature|build .* (into|for) (yourself|you|gwen)|implement this|implement .* (in|for) (yourself|you|gwen)|make (the )?(changes|change)( in| to)? (the )?code|make .* code changes?|wire .* (into|up)|spawn codex|codex .* (this folder|this repo|gwen|your code)|gwen.*(bug|broken|feature)|daily check-?in|task tracker|input bar|conversation window)\b/i.test(text);
+  return /\b(self[- ]?(fix|build|building|repair)|fix yourself|fix this( thing| bug| issue)?|change (your|gwen)|edit (your|gwen)|modify (your|gwen)|update (your|gwen)|add .* to gwen|add .* feature|build this feature|build .* feature|build .* (into|for) (yourself|you|gwen)|implement this|implement .* (in|for) (yourself|you|gwen)|make (the )?(changes|change)( in| to)? (the )?code|make .* code changes?|wire .* (into|up)|spawn codex|codex .* (this folder|this repo|gwen|your code)|gwen.*(bug|broken|feature)|daily check-?in|task tracker|input bar|conversation window|loading state|progress animation|visual (indicator|feedback)|updating (yourself|myself)|rewir(e|ing) (yourself|myself))\b/i.test(text);
 }
 
 export interface LocalFastPathOptions {
